@@ -1,0 +1,44 @@
+// ------ Native Lists ------
+print("List creation:")
+list = [10, 20, 30]
+print(list)
+
+print("List access:")
+print(list[0])
+print(list[1])
+print(list[2])
+print(list)
+
+print("Mixed types:")
+mixed = [1, "two", true, [4, 5]]
+print(mixed)
+print(mixed[3]) // Nested list
+
+// ------ Until Loop ------
+print("Until loop (should count 0 to 4):")
+i = 0
+until (i == 5) {
+  print(i)
+  i = i + 1
+}
+
+// ------ Complex Example ------
+print("Iterating over a list using index:")
+arr = ["apple", "banana", "cherry"]
+count = 0 
+// We don't have list.length yet, so we hardcode 3 or wait until error
+maybe {
+  until (count == 3) {
+    print(arr[count])
+    count = count + 1
+  }
+}
+print("Done iteration.")
+
+// Index out of bounds check
+print("Testing bounds check:")
+maybe {
+  print(arr[100])
+} otherwise {
+  print("Caught out of bounds error!")
+}

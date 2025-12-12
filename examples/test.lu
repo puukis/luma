@@ -1,0 +1,82 @@
+// ============================================
+// Luma Language - Unique Features Demo
+// ============================================
+
+// ------ Echo Loops ------
+// Repeat a block N times (cleaner than for loops!)
+print("Echo loop demo:")
+echo 3 {
+  print("  Hello from Luma!")
+}
+
+// Echo with a variable
+count = 5
+echo count {
+  print("  Counting...")
+}
+
+// ------ Swap Operator ------
+// Swap two variables with <->
+print("Swap demo:")
+a = 10
+b = 20
+print("Before swap:")
+print(a)
+print(b)
+
+a <-> b
+
+print("After swap:")
+print(a)
+print(b)
+
+// Works with any type
+name1 = "Alice"
+name2 = "Bob"
+name1 <-> name2
+print(name1)  // Bob
+print(name2)  // Alice
+
+// ------ Maybe Blocks ------
+// Handle errors gracefully without crashing
+print("Maybe block demo:")
+
+// This would normally crash, but maybe handles it
+maybe {
+  x = undefined_variable
+  print("This won't print")
+} otherwise {
+  print("  Handled error gracefully!")
+}
+
+// Maybe without otherwise - just silently continues
+maybe {
+  y = 1 / 0  // division by zero
+}
+print("  Program continues after silent error!")
+
+// Successful maybe block
+maybe {
+  result = 10 + 5
+  print("  Success: ")
+  print(result)
+}
+
+// ------ Combining Features ------
+print("Combined demo:")
+items = 0
+echo 3 {
+  items = items + 1
+}
+print("Items counted:")
+print(items)
+
+// Swap inside echo
+x = 1
+y = 100
+echo 2 {
+  x <-> y
+  print(x)
+}
+
+print("Done! Luma is awesome!")

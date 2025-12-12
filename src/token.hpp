@@ -1,0 +1,143 @@
+#pragma once
+#include <string>
+
+enum class TokenType {
+  // Single-character tokens
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  RightBrace,
+  Comma,
+  Dot,
+  Semicolon,
+  LeftBracket,  // [
+  RightBracket, // ]
+
+  Plus,
+  Minus,
+  Star,
+  Slash,
+
+  // One or two character tokens
+  Bang,
+  BangEqual,
+  Equal,
+  EqualEqual,
+  Greater,
+  GreaterEqual,
+  Less,
+  LessEqual,
+  Swap, // <->
+
+  // Literals
+  Identifier,
+  Number,
+  String,
+
+  // Keywords
+  Def,
+  Return,
+  If,
+  Else,
+  While,
+  True,
+  False,
+  Nil,
+  Print,
+  Echo,      // Luma unique: echo N { }
+  Maybe,     // Luma unique: maybe { } otherwise { }
+  Otherwise, // Luma unique: otherwise block
+  Until,     // until (cond)
+
+  Eof
+};
+
+inline const char *tokenTypeName(TokenType t) {
+  switch (t) {
+  case TokenType::LeftParen:
+    return "LeftParen";
+  case TokenType::RightParen:
+    return "RightParen";
+  case TokenType::LeftBrace:
+    return "LeftBrace";
+  case TokenType::RightBrace:
+    return "RightBrace";
+  case TokenType::Comma:
+    return "Comma";
+  case TokenType::Dot:
+    return "Dot";
+  case TokenType::Semicolon:
+    return "Semicolon";
+  case TokenType::LeftBracket:
+    return "LeftBracket";
+  case TokenType::RightBracket:
+    return "RightBracket";
+  case TokenType::Plus:
+    return "Plus";
+  case TokenType::Minus:
+    return "Minus";
+  case TokenType::Star:
+    return "Star";
+  case TokenType::Slash:
+    return "Slash";
+  case TokenType::Bang:
+    return "Bang";
+  case TokenType::BangEqual:
+    return "BangEqual";
+  case TokenType::Equal:
+    return "Equal";
+  case TokenType::EqualEqual:
+    return "EqualEqual";
+  case TokenType::Greater:
+    return "Greater";
+  case TokenType::GreaterEqual:
+    return "GreaterEqual";
+  case TokenType::Less:
+    return "Less";
+  case TokenType::LessEqual:
+    return "LessEqual";
+  case TokenType::Swap:
+    return "Swap";
+  case TokenType::Identifier:
+    return "Identifier";
+  case TokenType::Number:
+    return "Number";
+  case TokenType::String:
+    return "String";
+  case TokenType::Def:
+    return "Def";
+  case TokenType::Return:
+    return "Return";
+  case TokenType::If:
+    return "If";
+  case TokenType::Else:
+    return "Else";
+  case TokenType::While:
+    return "While";
+  case TokenType::True:
+    return "True";
+  case TokenType::False:
+    return "False";
+  case TokenType::Nil:
+    return "Nil";
+  case TokenType::Print:
+    return "Print";
+  case TokenType::Echo:
+    return "Echo";
+  case TokenType::Maybe:
+    return "Maybe";
+  case TokenType::Otherwise:
+    return "Otherwise";
+  case TokenType::Until:
+    return "Until";
+  case TokenType::Eof:
+    return "Eof";
+  }
+  return "Unknown";
+}
+
+struct Token {
+  TokenType type;
+  std::string lexeme; // the exact text
+  int line;
+};

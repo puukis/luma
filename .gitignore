@@ -1,0 +1,22 @@
+# C++ / CMake
+build/
+cmake-build-*/
+compile_commands.json
+.cache/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+lumac
+
+# System
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
