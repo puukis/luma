@@ -151,7 +151,30 @@ ExprPtr Parser::call() {
 static std::string unquoteStringLexeme(const std::string &lexeme) {
   // lexeme includes quotes, e.g. "\"big\""
   if (lexeme.size() >= 2 && lexeme.front() == '"' && lexeme.back() == '"') {
-    return lexeme.substr(1, lexeme.size() - 2);
+    std::string inner = lexeme.substr(1, lexeme.size() - 2);
+    std::string result;
+    result.reserve(inner.size());
+    for (size_t i = 0; i < inner.size(); ++i) {
+      if (inner[i] == '\\' && i + 1 < inner.size()) {
+        char next = inner[i + 1];
+        switch (next) {
+        case 'n': result += '\n'; break;
+        case 'r': result += '\r'; break;
+        case 't': result += '\t'; break;
+        case '\\': result += '\\'; break;
+        case '"': result += '"'; break;
+        default: 
+          // Preserve backslash if unknown escape
+          result += '\\'; 
+          result += next; 
+          break;
+        }
+        i++; // skip next
+      } else {
+        result += inner[i];
+      }
+    }
+    return result;
   }
   return lexeme;
 }
