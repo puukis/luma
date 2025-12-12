@@ -1,17 +1,20 @@
+// Project headers MUST come before Windows headers to avoid macro conflicts
+// (Windows defines TokenType as a macro in winnt.h)
+#include "ast_printer.hpp"
+#include "interpreter.hpp"
+#include "lexer.hpp"
+#include "parser.hpp"
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
 #ifdef _WIN32
-#include <windows.h>
 #include <io.h>
 #include <fcntl.h>
+// Include windows.h AFTER our headers to prevent TokenType macro pollution
+#include <windows.h>
 #endif
-
-#include "ast_printer.hpp"
-#include "interpreter.hpp"
-#include "lexer.hpp"
-#include "parser.hpp"
 
 static std::string readFile(const std::string &path) {
   std::ifstream in(path, std::ios::in | std::ios::binary);
