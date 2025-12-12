@@ -1,0 +1,11 @@
+module @std.json
+
+// Placeholder JSON module
+
+open def stringify(obj) {
+  return "[JSON object]"
+}
+
+open def parse(str) {
+  return nil
+}

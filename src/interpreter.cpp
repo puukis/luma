@@ -14,6 +14,10 @@ Interpreter::Interpreter() {
   env_ = globals_;
 }
 
+void Interpreter::setExecutablePath(const std::string &path) {
+  executablePath_ = fs::absolute(path).string();
+}
+
 void Interpreter::setEntryFile(const std::string &path) {
   entryFilePath_ = fs::absolute(path).string();
   initializeRoots();
@@ -34,18 +38,27 @@ void Interpreter::initializeRoots() {
     projectRoot_ = entryDir.string();
   }
 
-  // Stdlib root: look for std/ relative to project, or fallback to cwd/std
-  fs::path stdPath = fs::path(projectRoot_) / "std";
-  if (fs::exists(stdPath) && fs::is_directory(stdPath)) {
-    stdlibRoot_ = stdPath.string();
-  } else {
-    // Fallback: current working directory / std
-    stdPath = fs::current_path() / "std";
-    if (fs::exists(stdPath) && fs::is_directory(stdPath)) {
-      stdlibRoot_ = stdPath.string();
-    } else {
-      // Last resort: assume std/ is next to the executable (not implemented fully)
-      stdlibRoot_ = (fs::current_path() / "std").string();
+  // Stdlib root:
+  // 1. Check installed "Module" folder next to executable
+  if (!executablePath_.empty()) {
+    fs::path exePath(executablePath_);
+    fs::path installedModules = exePath.parent_path() / "Module";
+    if (fs::exists(installedModules) && fs::is_directory(installedModules)) {
+      stdlibRoot_ = installedModules.string();
+    }
+  }
+
+  // 2. Check local "std" folder in project root (overrides installed for dev)
+  fs::path projectStd = fs::path(projectRoot_) / "std";
+  if (fs::exists(projectStd) && fs::is_directory(projectStd)) {
+    stdlibRoot_ = projectStd.string();
+  }
+
+  // 3. Last fallback: current working directory / std
+  if (stdlibRoot_.empty()) {
+    fs::path cwdStd = fs::current_path() / "std";
+    if (fs::exists(cwdStd) && fs::is_directory(cwdStd)) {
+      stdlibRoot_ = cwdStd.string();
     }
   }
 }

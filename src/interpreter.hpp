@@ -16,6 +16,7 @@ public:
   void run(const std::vector<StmtPtr> &program);
 
   // Set the entry file path (used to determine project root)
+  void setExecutablePath(const std::string &path);
   void setEntryFile(const std::string &path);
 
 private:
@@ -27,6 +28,7 @@ private:
   std::unordered_map<std::string, std::vector<StmtPtr>> moduleAstCache_; // Keep ASTs alive
   std::unordered_set<std::string> modulesLoading_;
   std::string entryFilePath_;
+  std::string executablePath_;
   std::string projectRoot_;
   std::string stdlibRoot_;
   std::string currentModuleId_;

@@ -90,11 +90,21 @@ if (-not (Test-Path $BinaryPath)) {
 
 Write-Success "Build successful!"
 
+
 # Install
 Write-Info "Installing to $InstallDir..."
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $Destination = Join-Path $InstallDir $BinaryName
 Copy-Item $BinaryPath $Destination -Force
+
+# Install Standard Library Modules
+$ModuleDir = Join-Path $InstallDir "Module"
+Write-Info "Installing modules to $ModuleDir..."
+if (Test-Path $ModuleDir) {
+    Remove-Item -Recurse -Force $ModuleDir
+}
+New-Item -ItemType Directory -Force -Path $ModuleDir | Out-Null
+Copy-Item -Path (Join-Path $SourceDir "std\*") -Destination $ModuleDir -Recurse -Force
 
 $AliasPath = Join-Path $InstallDir $AliasName
 if ($AliasPath -ne $Destination) {

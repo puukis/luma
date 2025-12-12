@@ -16,6 +16,11 @@
 #include <windows.h>
 #endif
 
+#ifdef __linux__
+#include <limits.h>
+#include <unistd.h>
+#endif
+
 static std::string readFile(const std::string &path) {
   std::ifstream in(path, std::ios::in | std::ios::binary);
   if (!in)
@@ -23,6 +28,20 @@ static std::string readFile(const std::string &path) {
   std::ostringstream ss;
   ss << in.rdbuf();
   return ss.str();
+}
+
+static std::string getExecutablePath() {
+#ifdef _WIN32
+  char path[MAX_PATH];
+  GetModuleFileNameA(NULL, path, MAX_PATH);
+  return std::string(path);
+#elif defined(__linux__)
+  char result[PATH_MAX];
+  ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+  return std::string(result, (count > 0) ? count : 0);
+#else
+  return "";
+#endif
 }
 
 static void usage() {
@@ -83,6 +102,7 @@ int main(int argc, char **argv) {
 
     if (mode == "run") {
       Interpreter interp;
+      interp.setExecutablePath(getExecutablePath());
       interp.setEntryFile(file);
       interp.run(program);
       return 0;

@@ -117,6 +117,17 @@ else
     fail "Failed to copy binary to installation directory."
 fi
 
+# Install Standard Library Modules
+MODULE_DIR="$INSTALL_DIR/Module"
+log_info "Installing modules to $MODULE_DIR..."
+rm -rf "$MODULE_DIR"
+mkdir -p "$MODULE_DIR"
+if cp -r "$SOURCE_DIR/std/"* "$MODULE_DIR/"; then
+    log_success "Installed modules."
+else
+    log_warn "Failed to install standard library modules."
+fi
+
 # Create symlink for luma
 if ln -sf "$INSTALL_DIR/$BINARY_NAME" "$INSTALL_DIR/$ALIAS_NAME"; then
     log_success "Created alias $ALIAS_NAME pointing to $BINARY_NAME"

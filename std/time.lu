@@ -1,0 +1,7 @@
+module @std.time
+
+// Placeholder Time module
+
+open def now() {
+  return 0
+}

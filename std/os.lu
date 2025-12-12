@@ -1,0 +1,11 @@
+module @std.os
+
+// Placeholder OS module
+
+open def name() {
+  return "Windows" // Simplified for now
+}
+
+open def cwd() {
+  return "." 
+}
