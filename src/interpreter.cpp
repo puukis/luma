@@ -818,6 +818,19 @@ static Value nativeOsExit(const std::vector<Value> &args) {
     return std::monostate{}; // Unreachable
 }
 
+static Value nativeIoAsk(const std::vector<Value> &args) {
+    if (auto prompt = std::get_if<std::string>(&args[0])) {
+        std::cout << *prompt;
+        // Ensure prompt is displayed immediately
+        std::cout.flush();
+    }
+    std::string line;
+    if (std::getline(std::cin, line)) {
+        return line;
+    }
+    return std::monostate{};
+}
+
 static Value nativeIoInput(const std::vector<Value> &args) {
     std::string line;
     if (std::getline(std::cin, line)) {
@@ -1103,5 +1116,6 @@ void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr export
       defineNative("parse", nativeJsonParse, 1);
   } else if (moduleId == "@std.io") {
       defineNative("input", nativeIoInput, 0);
+      defineNative("ask", nativeIoAsk, 1);
   }
 }

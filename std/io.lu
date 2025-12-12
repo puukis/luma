@@ -15,9 +15,11 @@ open def input() {
 }
 
 // Prompts the user and returns their input.
+// Prompts the user and returns their input.
+// Native implementation is injected by interpreter.
 open def ask(prompt) {
-    print(prompt + " ")
-    return input()
+  print(prompt)
+  return input()
 }
 
 open def log(msg) {
