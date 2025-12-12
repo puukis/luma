@@ -2,6 +2,7 @@
 #include "ast.hpp"
 #include "token.hpp"
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 class Parser {

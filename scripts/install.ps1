@@ -103,7 +103,7 @@ if ($AliasPath -ne $Destination) {
         Write-Success "Created alias $AliasName pointing to $BinaryName"
     }
     catch {
-        Write-WarnMessage "Failed to create alias $AliasName : $($_.Exception.Message)"
+        Write-WarnMessage "Failed to create alias $AliasName (it may already exist): $($_.Exception.Message)"
     }
 }
 
