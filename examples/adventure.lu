@@ -1,0 +1,212 @@
+// ========================================
+// 🎮 LUMA DUNGEON CRAWLER - Text Adventure
+// ========================================
+// Demonstrates: classes, modules, echo, swap, maybe/otherwise, until
+
+module @app.adventure
+
+use @std.io as io
+
+// ========== Game Classes ==========
+
+class Hero {
+  def init(name, hp, attack) {
+    this.name = name
+    this.hp = hp
+    this.maxHp = hp
+    this.attack = attack
+    this.gold = 0
+    this.potions = 2
+  }
+  
+  def isAlive() {
+    return this.hp > 0
+  }
+  
+  def heal() {
+    if (this.potions > 0) {
+      this.potions = this.potions - 1
+      this.hp = this.hp + 30
+      if (this.hp > this.maxHp) {
+        this.hp = this.maxHp
+      }
+      io.println("🧪 Used potion! HP restored to " + this.hp)
+    } else {
+      io.println("❌ No potions left!")
+    }
+  }
+  
+  def stats() {
+    io.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    io.println("🦸 " + this.name)
+    io.println("  ❤️  HP: " + this.hp + "/" + this.maxHp)
+    io.println("  ⚔️  ATK: " + this.attack)
+    io.println("  💰 Gold: " + this.gold)
+    io.println("  🧪 Potions: " + this.potions)
+    io.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  }
+}
+
+class Monster {
+  def init(name, hp, attack, gold) {
+    this.name = name
+    this.hp = hp
+    this.attack = attack
+    this.gold = gold
+  }
+  
+  def isAlive() {
+    return this.hp > 0
+  }
+}
+
+// ========== Battle System ==========
+
+def battle(hero, monster) {
+  io.println("")
+  io.println("⚔️ ═══════════════════════════ ⚔️")
+  io.println("  A wild " + monster.name + " appears!")
+  io.println("  Monster HP: " + monster.hp + " | ATK: " + monster.attack)
+  io.println("⚔️ ═══════════════════════════ ⚔️")
+  
+  round = 1
+  
+  // Battle until someone dies
+  until (hero.hp <= 0) {
+    if (monster.hp <= 0) {
+      return true  // Hero wins
+    }
+    
+    io.println("")
+    io.println("── Round " + round + " ──")
+    
+    // Hero attacks
+    damage = hero.attack + (round * 2)  // Combo bonus!
+    monster.hp = monster.hp - damage
+    io.println("💥 " + hero.name + " deals " + damage + " damage!")
+    
+    if (monster.hp <= 0) {
+      io.println("🎉 " + monster.name + " defeated!")
+      hero.gold = hero.gold + monster.gold
+      io.println("💰 Gained " + monster.gold + " gold!")
+      return true
+    }
+    
+    // Monster attacks
+    monsterDamage = monster.attack
+    hero.hp = hero.hp - monsterDamage
+    io.println("🔥 " + monster.name + " strikes back for " + monsterDamage + "!")
+    io.println("   " + hero.name + " HP: " + hero.hp)
+    
+    round = round + 1
+  }
+  
+  return false  // Hero lost
+}
+
+// ========== Dungeon Encounters ==========
+
+def spawnMonster(level) {
+  // Different monsters based on dungeon level
+  if (level == 1) {
+    return Monster("👻 Ghost", 30, 8, 10)
+  }
+  if (level == 2) {
+    return Monster("🐺 Wolf", 45, 12, 20)
+  }
+  if (level == 3) {
+    return Monster("🧟 Zombie", 60, 15, 35)
+  }
+  if (level == 4) {
+    return Monster("🐉 Dragon", 100, 25, 100)
+  }
+  return Monster("💀 Skeleton", 40, 10, 15)
+}
+
+def treasureRoom(hero) {
+  io.println("")
+  io.println("✨ ═══════════════════════════ ✨")
+  io.println("  You found a TREASURE ROOM!")
+  io.println("✨ ═══════════════════════════ ✨")
+  
+  // Use maybe to simulate risky treasure
+  maybe {
+    goldFound = 50
+    hero.gold = hero.gold + goldFound
+    io.println("💎 Found " + goldFound + " gold!")
+    hero.potions = hero.potions + 1
+    io.println("🧪 Found a health potion!")
+  } otherwise {
+    io.println("💨 It was a trap! Nothing here...")
+  }
+}
+
+// ========== Main Game Loop ==========
+
+io.println("")
+io.println("╔═══════════════════════════════════════╗")
+io.println("║   🏰 WELCOME TO LUMA DUNGEON 🏰       ║")
+io.println("║        A Text Adventure Game          ║")
+io.println("╚═══════════════════════════════════════╝")
+io.println("")
+
+// Create our hero
+player = Hero("Luma Knight", 100, 15)
+player.stats()
+
+// Dungeon crawl - 4 levels!
+level = 1
+maxLevel = 4
+
+echo maxLevel {
+  io.println("")
+  io.println("🚪 ════════════════════════════════════")
+  io.println("   DUNGEON LEVEL " + level)
+  io.println("🚪 ════════════════════════════════════")
+  
+  // Spawn and fight monster
+  monster = spawnMonster(level)
+  won = battle(player, monster)
+  
+  if (won == false) {
+    io.println("")
+    io.println("💀 GAME OVER 💀")
+    io.println("You were defeated on level " + level)
+    return nil
+  }
+  
+  // Heal if low HP
+  if (player.hp < 40) {
+    io.println("")
+    io.println("⚠️  HP Critical! Auto-using potion...")
+    player.heal()
+  }
+  
+  // Treasure room on even levels
+  if (level == 2) {
+    treasureRoom(player)
+  }
+  if (level == 4) {
+    treasureRoom(player)
+  }
+  
+  level = level + 1
+}
+
+// Victory!
+io.println("")
+io.println("🏆 ═══════════════════════════════════════ 🏆")
+io.println("    CONGRATULATIONS! YOU CONQUERED THE")
+io.println("          LUMA DUNGEON!")
+io.println("🏆 ═══════════════════════════════════════ 🏆")
+io.println("")
+player.stats()
+
+// Bonus: Demonstrate swap operator
+io.println("")
+io.println("🔄 Bonus Demo: The SWAP operator!")
+a = "First"
+b = "Second"
+io.println("Before swap: a=" + a + ", b=" + b)
+a <-> b
+io.println("After swap:  a=" + a + ", b=" + b)

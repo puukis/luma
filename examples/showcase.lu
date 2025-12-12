@@ -1,0 +1,204 @@
+// ========================================
+// 🎮 LUMA SHOWCASE - Advanced Features Demo
+// ========================================
+// Demonstrates: classes, modules, echo, swap, maybe/otherwise, until
+
+module @app.showcase
+
+use @std.io as io
+
+// ========== Classes & OOP ==========
+
+class Counter {
+  def init(start) {
+    this.value = start
+  }
+  
+  def increment() {
+    this.value = this.value + 1
+    return this.value
+  }
+  
+  def decrement() {
+    this.value = this.value - 1
+    return this.value
+  }
+  
+  def get() {
+    return this.value
+  }
+}
+
+class Calculator {
+  def init() {
+    this.result = 0
+  }
+  
+  def add(x) {
+    this.result = this.result + x
+    return this.result
+  }
+  
+  def multiply(x) {
+    this.result = this.result * x
+    return this.result
+  }
+  
+  def reset() {
+    this.result = 0
+  }
+}
+
+// ========== Functions ==========
+
+def factorial(n) {
+  if (n <= 1) {
+    return 1
+  }
+  return n * factorial(n - 1)
+}
+
+def fibonacci(n) {
+  if (n <= 1) {
+    return n
+  }
+  return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+def isPrime(n) {
+  if (n < 2) {
+    return false
+  }
+  if (n == 2) {
+    return true
+  }
+  divisor = 2
+  until (divisor * divisor > n) {
+    if (n - (n / divisor) * divisor == 0) {
+      return false
+    }
+    divisor = divisor + 1
+  }
+  return true
+}
+
+// ========== Main Demo ==========
+
+print("╔═══════════════════════════════════════╗")
+print("║     🌟 LUMA LANGUAGE SHOWCASE 🌟      ║")
+print("╚═══════════════════════════════════════╝")
+print("")
+
+// Demo: Module System
+print("📦 MODULE SYSTEM")
+print("   Imported @std.io as 'io'")
+io.println("   This is printed via io.println!")
+print("")
+
+// Demo: Classes
+print("🎭 CLASSES & OBJECTS")
+counter = Counter(10)
+print("   Created Counter starting at 10")
+print("   After increment:")
+print(counter.increment())
+print("   After increment again:")
+print(counter.increment())
+print("   After decrement:")
+print(counter.decrement())
+print("")
+
+// Demo: Calculator chain
+print("🧮 CALCULATOR DEMO")
+calc = Calculator()
+calc.add(5)
+calc.add(10)
+calc.multiply(2)
+print("   5 + 10, then * 2 =")
+print(calc.result)
+print("")
+
+// Demo: Recursive Functions
+print("🔢 RECURSIVE FUNCTIONS")
+print("   Factorial of 6:")
+print(factorial(6))
+print("   Fibonacci sequence (first 10):")
+echo 10 {
+  // Can't easily iterate here, let's do direct calls
+}
+print(fibonacci(0))
+print(fibonacci(1))
+print(fibonacci(2))
+print(fibonacci(3))
+print(fibonacci(4))
+print(fibonacci(5))
+print(fibonacci(6))
+print(fibonacci(7))
+print("")
+
+// Demo: Until loop (inverse of while)
+print("🔁 UNTIL LOOP (unique to Luma!)")
+print("   Counting UP until x >= 5:")
+x = 0
+until (x >= 5) {
+  print(x)
+  x = x + 1
+}
+print("")
+
+// Demo: Echo loop
+print("🔄 ECHO LOOP (repeat N times)")
+print("   echo 3 { print('Hello!') }:")
+echo 3 {
+  print("Hello!")
+}
+print("")
+
+// Demo: Swap operator
+print("🔀 SWAP OPERATOR <->")
+a = 100
+b = 200
+print("   Before: a=100, b=200")
+a <-> b
+print("   After swap:")
+print("   a=")
+print(a)
+print("   b=")
+print(b)
+print("")
+
+// Demo: Maybe/Otherwise (error handling)
+print("⚡ MAYBE/OTHERWISE (error handling)")
+print("   Trying risky operation...")
+maybe {
+  // This will work
+  result = 42 / 2
+  print("   Success! Result:")
+  print(result)
+} otherwise {
+  print("   Caught an error!")
+}
+
+maybe {
+  // Force an error by using undefined variable
+  print(undefined_var)
+} otherwise {
+  print("   Recovered from error gracefully!")
+}
+print("")
+
+// Demo: Prime checker
+print("🔍 PRIME NUMBER CHECKER")
+print("   Checking primes from 2 to 20:")
+n = 2
+until (n > 20) {
+  if (isPrime(n)) {
+    print(n)
+  }
+  n = n + 1
+}
+print("")
+
+// Finale
+print("═══════════════════════════════════════")
+print("✨ Demo complete! Luma is awesome! ✨")
+print("═══════════════════════════════════════")

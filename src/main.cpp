@@ -2,6 +2,12 @@
 #include <iostream>
 #include <sstream>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 #include "ast_printer.hpp"
 #include "interpreter.hpp"
 #include "lexer.hpp"
@@ -25,6 +31,17 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+  // Enable UTF-8 output on Windows console for emojis and Unicode
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+  // Enable ANSI escape sequences (for colors if needed)
+  HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+  DWORD dwMode = 0;
+  GetConsoleMode(hOut, &dwMode);
+  SetConsoleMode(hOut, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
+
   try {
     std::string mode = "run";
     std::string file;
