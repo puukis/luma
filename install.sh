@@ -3,6 +3,7 @@
 # Configuration
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="lumac"
+ALIAS_NAME="luma"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SOURCE_DIR/build"
 
@@ -116,6 +117,13 @@ else
     fail "Failed to copy binary to installation directory."
 fi
 
+# Create symlink for luma
+if ln -sf "$INSTALL_DIR/$BINARY_NAME" "$INSTALL_DIR/$ALIAS_NAME"; then
+    log_success "Created alias $ALIAS_NAME pointing to $BINARY_NAME"
+else
+    log_warn "Failed to create alias $ALIAS_NAME"
+fi
+
 # 4. PATH Configuration
 log_info "Checking PATH configuration..."
 
@@ -151,6 +159,7 @@ echo ""
 log_success "Installation complete! 🎉"
 if  command -v "$INSTALL_DIR/$BINARY_NAME" &> /dev/null; then
     echo "You can test it directly: $INSTALL_DIR/$BINARY_NAME --version" # Assuming --version exists, or just run it
+    echo "Or use the alias: $INSTALL_DIR/$ALIAS_NAME <file.lu>"
 else
      echo "Installed at: $INSTALL_DIR/$BINARY_NAME"
 fi
