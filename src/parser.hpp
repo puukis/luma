@@ -43,6 +43,8 @@ private:
 
   // expressions
   ExprPtr expression();
+  ExprPtr logicalOr();
+  ExprPtr logicalAnd();
   ExprPtr equality();
   ExprPtr comparison();
   ExprPtr term();

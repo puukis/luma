@@ -385,7 +385,27 @@ std::unique_ptr<BlockStmt> Parser::block() {
 
 // -------------------- expressions --------------------
 
-ExprPtr Parser::expression() { return equality(); }
+ExprPtr Parser::expression() { return logicalOr(); }
+
+ExprPtr Parser::logicalOr() {
+  auto expr = logicalAnd();
+  while (match({TokenType::Or})) {
+    Token op = previous();
+    auto right = logicalAnd();
+    expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
+  }
+  return expr;
+}
+
+ExprPtr Parser::logicalAnd() {
+  auto expr = equality();
+  while (match({TokenType::And})) {
+    Token op = previous();
+    auto right = equality();
+    expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
+  }
+  return expr;
+}
 
 ExprPtr Parser::equality() {
   auto expr = comparison();
@@ -429,7 +449,7 @@ ExprPtr Parser::factor() {
 }
 
 ExprPtr Parser::unary() {
-  if (match({TokenType::Bang, TokenType::Minus})) {
+  if (match({TokenType::Bang, TokenType::Minus, TokenType::Not})) {
     Token op = previous();
     auto right = unary();
     return std::make_unique<UnaryExpr>(op, std::move(right));

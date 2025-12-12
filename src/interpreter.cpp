@@ -363,13 +363,26 @@ Value Interpreter::evaluate(const Expr &expr) {
       requireNumber(right, "unary '-'");
       return -std::get<double>(right);
     }
-    if (u->op.type == TokenType::Bang) {
+    if (u->op.type == TokenType::Bang || u->op.type == TokenType::Not) {
       return !isTruthy(right);
     }
     throw std::runtime_error("Unknown unary operator '" + u->op.lexeme + "'");
   }
 
   if (auto *b = dynamic_cast<const BinaryExpr *>(&expr)) {
+    // Short-circuit evaluation for logical operators
+    if (b->op.type == TokenType::Or) {
+      Value left = evaluate(*b->left);
+      if (isTruthy(left)) return left;  // Short-circuit: don't evaluate right
+      return evaluate(*b->right);
+    }
+    if (b->op.type == TokenType::And) {
+      Value left = evaluate(*b->left);
+      if (!isTruthy(left)) return left;  // Short-circuit: don't evaluate right
+      return evaluate(*b->right);
+    }
+
+    // Eager evaluation for other binary operators
     Value left = evaluate(*b->left);
     Value right = evaluate(*b->right);
 

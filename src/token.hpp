@@ -60,6 +60,11 @@ enum class TokenType {
   Open,      // open visibility (public)
   Closed,    // closed visibility (private)
 
+  // Logical operators
+  And,       // logical and
+  Or,        // logical or
+  Not,       // logical not (unary)
+
   Eof
 };
 
@@ -159,6 +164,12 @@ inline const char *tokenTypeName(TokenType t) {
     return "Open";
   case TokenType::Closed:
     return "Closed";
+  case TokenType::And:
+    return "And";
+  case TokenType::Or:
+    return "Or";
+  case TokenType::Not:
+    return "Not";
   case TokenType::Eof:
     return "Eof";
   }

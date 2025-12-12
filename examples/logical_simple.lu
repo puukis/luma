@@ -1,0 +1,47 @@
+// Simple logical operators test
+print("=== LOGICAL OPERATORS TEST ===")
+print("")
+
+print("Basic AND:")
+print(true and true)
+print(true and false)
+print(false and true)
+print(false and false)
+print("")
+
+print("Basic OR:")
+print(true or true)
+print(true or false)
+print(false or true)
+print(false or false)
+print("")
+
+print("Basic NOT:")
+print(not true)
+print(not false)
+print("")
+
+print("Precedence test (and before or):")
+print("true or false and false should be true:")
+print(true or false and false)
+print("")
+
+print("Short-circuit AND (should print false, not ERROR):")
+def error() {
+  print("ERROR!")
+  return true
+}
+print(false and error())
+print("")
+
+print("Short-circuit OR (should print true, not ERROR):")
+print(true or error())
+print("")
+
+print("Comparison combo:")
+x = 5
+print(x > 0 and x < 10)
+print(x < 0 or x > 3)
+print("")
+
+print("=== ALL TESTS PASSED ===")

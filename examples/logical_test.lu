@@ -1,0 +1,133 @@
+// ========================================
+// 🧪 LOGICAL OPERATORS TEST
+// ========================================
+// Tests: and, or, not with short-circuit evaluation
+
+print("╔═══════════════════════════════════════╗")
+print("║   🧪 LOGICAL OPERATORS TEST 🧪        ║")
+print("╚═══════════════════════════════════════╝")
+print("")
+
+// ========== Basic Tests ==========
+print("📌 BASIC OPERATIONS")
+
+print("true and true =")
+print(true and true)
+
+print("true and false =")
+print(true and false)
+
+print("false and true =")
+print(false and true)
+
+print("false and false =")
+print(false and false)
+print("")
+
+print("true or true =")
+print(true or true)
+
+print("true or false =")
+print(true or false)
+
+print("false or true =")
+print(false or true)
+
+print("false or false =")
+print(false or false)
+print("")
+
+print("not true =")
+print(not true)
+
+print("not false =")
+print(not false)
+print("")
+
+// ========== Short-Circuit Tests ==========
+print("📌 SHORT-CIRCUIT EVALUATION")
+
+def causeError() {
+  // This should NOT be called if short-circuit works
+  print("ERROR: This should not print!")
+  return true
+}
+
+print("false and causeError() - should NOT call causeError:")
+result = false and causeError()
+print(result)
+print("✓ Short-circuit AND works!")
+print("")
+
+print("true or causeError() - should NOT call causeError:")
+result = true or causeError()
+print(result)
+print("✓ Short-circuit OR works!")
+print("")
+
+// ========== Precedence Tests ==========
+print("📌 PRECEDENCE (and binds tighter than or)")
+
+print("true or false and false = (should be true, not false)")
+result = true or false and false
+print(result)
+
+print("false and true or true = (should be true)")
+result = false and true or true
+print(result)
+print("")
+
+// ========== Combination with Comparison ==========
+print("📌 COMBINING WITH COMPARISONS")
+
+x = 5
+print("x = 5")
+
+print("x > 0 and x < 10 =")
+print(x > 0 and x < 10)
+
+print("x < 0 or x > 3 =")
+print(x < 0 or x > 3)
+
+print("not (x == 5) =")
+print(not (x == 5))
+print("")
+
+// ========== Complex Expressions ==========
+print("📌 COMPLEX EXPRESSIONS")
+
+a = true
+b = false
+c = true
+
+print("a = true, b = false, c = true")
+
+print("(a or b) and c =")
+print((a or b) and c)
+
+print("not a or b =")
+print(not a or b)
+
+print("not (a or b) =")
+print(not (a or b))
+print("")
+
+// ========== Truthiness Tests ==========
+print("📌 TRUTHINESS")
+
+print("0 and true = (0 is falsy)")
+print(0 and true)
+
+print("1 or false = (1 is truthy)")
+print(1 or false)
+
+print("nil or 42 =")
+print(nil or 42)
+
+print("'hello' and 'world' =")
+print("hello" and "world")
+print("")
+
+print("═══════════════════════════════════════")
+print("✨ All logical operator tests passed! ✨")
+print("═══════════════════════════════════════")

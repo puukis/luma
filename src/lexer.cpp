@@ -15,6 +15,9 @@ static const std::unordered_map<std::string, TokenType> kKeywords = {
     {"module", TokenType::Module}, {"use", TokenType::Use},
     {"as", TokenType::As},         {"open", TokenType::Open},
     {"closed", TokenType::Closed},
+    // Logical operators
+    {"and", TokenType::And},       {"or", TokenType::Or},
+    {"not", TokenType::Not},
 };
 
 Lexer::Lexer(std::string source) : source_(std::move(source)) {}
