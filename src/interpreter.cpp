@@ -9,9 +9,31 @@
 
 namespace fs = std::filesystem;
 
+// Forward decls for global natives
+static Value nativeLen(const std::vector<Value> &args);
+static Value nativePush(const std::vector<Value> &args);
+static Value nativePop(const std::vector<Value> &args);
+static Value nativeKeys(const std::vector<Value> &args);
+static Value nativeRemove(const std::vector<Value> &args);
+
+
 Interpreter::Interpreter() {
   globals_ = std::make_shared<Environment>();
   env_ = globals_;
+
+  auto defineGlobal = [&](const std::string &name, std::function<Value(const std::vector<Value> &)> func, size_t arity) {
+    auto native = std::make_shared<NativeFunctionObject>();
+    native->name = name;
+    native->func = func;
+    native->arity = arity;
+    globals_->define(name, native);
+  };
+
+  defineGlobal("len", nativeLen, 1);
+  defineGlobal("push", nativePush, 2);
+  defineGlobal("pop", nativePop, 1);
+  defineGlobal("keys", nativeKeys, 1);
+  defineGlobal("remove", nativeRemove, 2);
 }
 
 void Interpreter::setExecutablePath(const std::string &path) {
@@ -1118,4 +1140,62 @@ void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr export
       defineNative("input", nativeIoInput, 0);
       defineNative("ask", nativeIoAsk, 1);
   }
+}
+
+// ========== Global Native Implementations ==========
+
+static Value nativeLen(const std::vector<Value> &args) {
+  const Value &v = args[0];
+  if (auto l = std::get_if<ListPtr>(&v))
+    return (double)(*l)->elements.size();
+  if (auto m = std::get_if<MapPtr>(&v))
+    return (double)(*m)->values.size();
+  if (auto s = std::get_if<std::string>(&v))
+    return (double)s->length();
+  throw std::runtime_error("Object has no length (only list, map, string).");
+}
+
+static Value nativePush(const std::vector<Value> &args) {
+  if (auto l = std::get_if<ListPtr>(&args[0])) {
+    (*l)->elements.push_back(args[1]);
+    return args[1]; // return pushed value
+  }
+  throw std::runtime_error("Expected list for push.");
+}
+
+static Value nativePop(const std::vector<Value> &args) {
+  if (auto l = std::get_if<ListPtr>(&args[0])) {
+    if ((*l)->elements.empty())
+      return std::monostate{}; // return nil
+    Value v = (*l)->elements.back();
+    (*l)->elements.pop_back();
+    return v;
+  }
+  throw std::runtime_error("Expected list for pop.");
+}
+
+static Value nativeKeys(const std::vector<Value> &args) {
+  if (auto m = std::get_if<MapPtr>(&args[0])) {
+    auto list = std::make_shared<List>();
+    for (const auto &[k, v] : (*m)->values) {
+      list->elements.push_back(k);
+    }
+    return list;
+  }
+  throw std::runtime_error("Expected map for keys.");
+}
+
+static Value nativeRemove(const std::vector<Value> &args) {
+  if (auto m = std::get_if<MapPtr>(&args[0])) {
+    if (auto k = std::get_if<std::string>(&args[1])) {
+      if ((*m)->values.count(*k)) {
+        Value v = (*m)->values.at(*k);
+        (*m)->values.erase(*k);
+        return v;
+      }
+      return std::monostate{};
+    }
+    throw std::runtime_error("Map keys must be strings.");
+  }
+  throw std::runtime_error("Expected map for remove.");
 }
