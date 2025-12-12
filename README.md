@@ -23,7 +23,7 @@ Luma is built with CMake and C++17.
 To install Luma heavily on your machine, run the following command (replace `<user>/<repo>` with your actual GitHub repository details):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/puukis/luma/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/puukis/luma/refs/heads/main/install.sh | bash
 ```
 
 ### Prerequisites
