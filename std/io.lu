@@ -5,6 +5,19 @@ module @std.io
 
 open def println(x) {
   print(x)
+  print("\n")
+}
+
+// Reads a line from stdin.
+// native def input()
+open def input() {
+    return ""
+}
+
+// Prompts the user and returns their input.
+open def ask(prompt) {
+    print(prompt + " ")
+    return input()
 }
 
 open def log(msg) {

@@ -1,11 +1,18 @@
 module @std.json
 
-// Placeholder JSON module
+// Standard JSON module
+// Backend: Native C++ implementation
 
+// Serializes a value to a JSON string.
+// native def stringify(obj)
 open def stringify(obj) {
-  return "[JSON object]"
+  // Native implementation injected at runtime
+  return nil
 }
 
+// Parses a JSON string into a Luma value.
+// native def parse(str)
 open def parse(str) {
+  // Native implementation injected at runtime
   return nil
 }

@@ -1,0 +1,59 @@
+use @std.io as io
+use @std.time as time
+use @std.os as os
+use @std.json as json
+
+io.println("--- Standard Library Verification ---")
+
+// Time
+now = time.now()
+io.print("Time: ")
+io.println(now)
+
+// OS
+io.println("OS Name: " + os.name())
+io.println("CWD: " + os.cwd())
+
+// JSON
+data = {
+    "name": "Luma",
+    "version": 1.0,
+    "features": ["modules", "natives", "classes"]
+}
+jsonStr = json.stringify(data)
+io.println("JSON Stringify: " + jsonStr)
+
+parsed = json.parse(jsonStr)
+io.println("JSON Parse Name: " + parsed["name"])
+
+io.println("--- Expanded Features ---")
+// Sleep
+io.print("Sleeping 500ms... ")
+start = time.now()
+time.sleep(500)
+elapsed = time.now() - start
+io.print("Done. Elapsed: ")
+io.println(elapsed)
+
+// Measure
+open def waste_time() {
+    time.sleep(100)
+}
+duration = time.measure(waste_time)
+io.print("Measured waste_time (100ms): ")
+io.println(duration)
+
+// Env
+path = os.env("PATH")
+if (path) {
+    io.print("PATH env found (length): ")
+    // io.println(path.length()) // string length not implemented yet?
+    io.println("yes") 
+} else {
+    io.println("PATH env not found")
+}
+
+// Exit
+io.println("Exiting with code 42...")
+os.exit(42)
+io.println("This should not print")

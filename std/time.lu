@@ -1,7 +1,23 @@
 module @std.time
 
-// Placeholder Time module
+// Standard Time module
+// Backend: Native C++ implementation
 
+// Returns the current Unix timestamp in seconds.
+// native def now()
 open def now() {
   return 0
+}
+
+// Pauses execution for the given number of milliseconds.
+// native def sleep(ms)
+open def sleep(ms) {
+    return nil
+}
+
+// Measures the execution time of a function in seconds.
+open def measure(fn) {
+    start = now()
+    fn()
+    return now() - start
 }

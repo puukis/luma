@@ -58,4 +58,5 @@ private:
   std::string resolveModulePath(const std::string &moduleId);
   std::string moduleIdToString(const std::vector<Token> &parts);
   void initializeRoots();
+  void injectNativeNatives(const std::string &moduleId, MapPtr exports);
 };

@@ -1,5 +1,5 @@
 #pragma once
-#include <cmath>
+#include <functional>
 #include <iomanip>
 #include <map>
 #include <memory>
@@ -32,9 +32,43 @@ using InstancePtr = std::shared_ptr<LumaInstance>;
 struct LumaMap;
 using MapPtr = std::shared_ptr<LumaMap>;
 
+// Forward declaration of Value for NativeFunction
+struct ValueWrapper;
+// We need a recursive definition for NativeFunction -> Value -> NativeFunction.
+// But std::variant is fine with incomplete types if we use pointers? No, Value
+// is by value. NativeFunction is std::function. std::function needs complete
+// type for operator(). But we can define NativeFunction as taking
+// vector<variant...>. Wait, Value is defined right here.
+
+// Circular dependency: Value depends on NativeFunction, NativeFunction depends
+// on Value. Solution: Use a struct wrapper or declared type.
+// Actually, std::function<Value(const std::vector<Value>&)> works if Value is
+// forward declared? No, it needs to know size.
+// The standard way is using std::any or void*, or a wrapper struct.
+// Let's forward declare Value, but we can't fully define NativeFunction before
+// Value.
+// HOWEVER, std::function types are erased. We can define NativeFunction with a
+// forward declared Value? No.
+// Let's define Value first, but without NativeFunction, then add it? No.
+//
+// Workaround: Define NativeFunction as a struct that holds the std::function?
+// Or simply use std::shared_ptr<NativeFunctionImpl> where NativeFunctionImpl
+// is defined later?
+// Lox uses a class for NativeFunction. Let's use a shared pointer to a struct.
+
+struct NativeFunctionObject;
+using NativeFunctionPtr = std::shared_ptr<NativeFunctionObject>;
+
 using Value =
     std::variant<std::monostate, double, std::string, bool, FunctionPtr,
-                 ListPtr, ClassPtr, InstancePtr, MapPtr>; // monostate = nil
+                 ListPtr, ClassPtr, InstancePtr, MapPtr, NativeFunctionPtr>; // monostate = nil
+
+struct NativeFunctionObject {
+    std::function<Value(const std::vector<Value>&)> func;
+    std::string name; // for debugging
+    size_t arity = 0; // -1 for variadic? Let's generic size_t.
+    bool variadic = false;
+};
 
 struct List {
   std::vector<Value> elements;
@@ -107,6 +141,8 @@ inline std::string valueToString(const Value &v) {
     return *b ? "true" : "false";
   if (auto f = std::get_if<FunctionPtr>(&v))
     return "<fn " + (*f)->name.lexeme + ">";
+  if (auto n = std::get_if<NativeFunctionPtr>(&v))
+      return "<native fn " + (*n)->name + ">";
   if (auto l = std::get_if<ListPtr>(&v)) {
     std::string s = "[";
     const auto &elems = (*l)->elements;
@@ -164,5 +200,7 @@ inline bool valuesEqual(const Value &a, const Value &b) {
     return ia->get() == std::get<InstancePtr>(b).get();
   if (auto ma = std::get_if<MapPtr>(&a))
     return ma->get() == std::get<MapPtr>(b).get();
+   if (auto na = std::get_if<NativeFunctionPtr>(&a))
+    return na->get() == std::get<NativeFunctionPtr>(b).get(); // pointer equality
   return false;
 }

@@ -300,6 +300,16 @@ Value Interpreter::callFunction(const Value &callee,
     return std::monostate{};
   }
 
+  if (auto nf = std::get_if<NativeFunctionPtr>(&callee)) {
+      NativeFunctionPtr native = *nf;
+      if (!native->variadic && args.size() != native->arity) {
+          throw std::runtime_error("Expected " + std::to_string(native->arity) +
+              " arguments but got " +
+              std::to_string(args.size()) + ".");
+      }
+      return native->func(args);
+  }
+
   if (auto klass = std::get_if<ClassPtr>(&callee)) {
     // Create instance
     auto instance = std::make_shared<LumaInstance>(*klass);
@@ -459,7 +469,8 @@ Value Interpreter::evaluate(const Expr &expr) {
       args.push_back(evaluate(*a));
 
     if (std::holds_alternative<FunctionPtr>(callee) ||
-        std::holds_alternative<ClassPtr>(callee)) {
+        std::holds_alternative<ClassPtr>(callee) ||
+        std::holds_alternative<NativeFunctionPtr>(callee)) {
       return callFunction(callee, args, c->paren);
     }
     throw std::runtime_error("Can only call functions and classes.");
@@ -744,5 +755,353 @@ MapPtr Interpreter::loadModule(const std::string &moduleId) {
   inModuleLoad_ = savedInModuleLoad;
   modulesLoading_.erase(moduleId);
 
+  injectNativeNatives(moduleId, exports);
+
   return exports;
+}
+
+// ========== Native Implementations ==========
+
+#include <chrono>
+#include <ctime>
+#include <thread>
+#include <cstdlib>
+
+static Value nativeTimeNow(const std::vector<Value> &args) {
+  using namespace std::chrono;
+  // Return seconds since epoch
+  auto now = system_clock::now();
+  auto duration = now.time_since_epoch();
+  double seconds = duration_cast<milliseconds>(duration).count() / 1000.0;
+  return seconds;
+}
+
+static Value nativeTimeSleep(const std::vector<Value> &args) {
+    if (auto ms = std::get_if<double>(&args[0])) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(*ms)));
+    }
+    return std::monostate{};
+}
+
+static Value nativeOsName(const std::vector<Value> &args) {
+#ifdef _WIN32
+  return std::string("Windows");
+#elif __APPLE__
+  return std::string("macOS");
+#elif __linux__
+  return std::string("Linux");
+#else
+  return std::string("Unknown");
+#endif
+}
+
+static Value nativeOsCwd(const std::vector<Value> &args) {
+  return fs::current_path().string();
+}
+
+static Value nativeOsEnv(const std::vector<Value> &args) {
+    if (auto key = std::get_if<std::string>(&args[0])) {
+        const char* val = std::getenv(key->c_str());
+        if (val) return std::string(val);
+    }
+    return std::monostate{};
+}
+
+static Value nativeOsExit(const std::vector<Value> &args) {
+    int code = 0;
+    if (!args.empty()) {
+        if (auto c = std::get_if<double>(&args[0])) {
+            code = static_cast<int>(*c);
+        }
+    }
+    std::exit(code);
+    return std::monostate{}; // Unreachable
+}
+
+static Value nativeIoInput(const std::vector<Value> &args) {
+    std::string line;
+    if (std::getline(std::cin, line)) {
+        return line;
+    }
+    return std::monostate{};
+}
+
+// --- JSON Helpers ---
+
+static std::string jsonStringify(const Value &v);
+
+static std::string jsonStringifyList(const ListPtr &list) {
+  std::string s = "[";
+  const auto &elems = list->elements;
+  for (size_t i = 0; i < elems.size(); ++i) {
+    if (i > 0)
+      s += ","; // JSON standard: no space required, but usually compact
+    s += jsonStringify(elems[i]);
+  }
+  s += "]";
+  return s;
+}
+
+static std::string jsonStringifyMap(const MapPtr &map) {
+  std::string s = "{";
+  const auto &values = map->values;
+  size_t i = 0;
+  for (const auto &[key, val] : values) {
+    if (i > 0)
+      s += ",";
+    s += "\"" + key + "\":" + jsonStringify(val);
+    i++;
+  }
+  s += "}";
+  return s;
+}
+
+static std::string jsonEscape(const std::string &str) {
+  std::string result = "\"";
+  for (char c : str) {
+    switch (c) {
+    case '\"': result += "\\\""; break;
+    case '\\': result += "\\\\"; break;
+    case '\b': result += "\\b"; break;
+    case '\f': result += "\\f"; break;
+    case '\n': result += "\\n"; break;
+    case '\r': result += "\\r"; break;
+    case '\t': result += "\\t"; break;
+    default:
+      if (static_cast<unsigned char>(c) < 32) {
+        // control chars
+        char buf[8];
+        snprintf(buf, sizeof(buf), "\\u%04x", c);
+        result += buf;
+      } else {
+        result += c;
+      }
+    }
+  }
+  result += "\"";
+  return result;
+}
+
+static std::string jsonStringify(const Value &v) {
+  if (std::holds_alternative<std::monostate>(v))
+    return "null";
+  if (auto d = std::get_if<double>(&v)) {
+    // Check if integer
+    double ip;
+    if (std::modf(*d, &ip) == 0.0) {
+      return std::to_string(static_cast<long long>(*d));
+    }
+    return std::to_string(*d);
+  }
+  if (auto s = std::get_if<std::string>(&v))
+    return jsonEscape(*s);
+  if (auto b = std::get_if<bool>(&v))
+    return *b ? "true" : "false";
+  if (auto l = std::get_if<ListPtr>(&v))
+    return jsonStringifyList(*l);
+  if (auto m = std::get_if<MapPtr>(&v))
+    return jsonStringifyMap(*m);
+  
+  return "\"<unsupported>\"";
+}
+
+static Value nativeJsonStringify(const std::vector<Value> &args) {
+  return jsonStringify(args[0]);
+}
+
+// Helper for parsing
+struct JsonParser {
+  std::string src;
+  size_t current = 0;
+
+  JsonParser(std::string s) : src(std::move(s)) {}
+
+  Value parse() {
+    skipWhitespace();
+    if (isAtEnd()) return std::monostate{};
+    char c = peek();
+    
+    if (c == '{') return parseObject();
+    if (c == '[') return parseArray();
+    if (c == '"') return parseString();
+    if (c == '-' || isdigit(c)) return parseNumber();
+    if (c == 't') return parseTrue();
+    if (c == 'f') return parseFalse();
+    if (c == 'n') return parseNull();
+
+    throw std::runtime_error("Invalid JSON at position " + std::to_string(current));
+  }
+
+  Value parseObject() {
+    consume('{');
+    auto map = std::make_shared<LumaMap>();
+    skipWhitespace();
+    if (peek() == '}') {
+        advance();
+        return map;
+    }
+
+    while (true) {
+        skipWhitespace();
+        if (peek() != '"') throw std::runtime_error("Expected string key in JSON object");
+        std::string key = parseStringVal();
+        skipWhitespace();
+        consume(':');
+        Value val = parse();
+        map->values[key] = val;
+        
+        skipWhitespace();
+        if (peek() == '}') {
+            advance();
+            break;
+        }
+        consume(',');
+    }
+    return map;
+  }
+
+  Value parseArray() {
+    consume('[');
+    auto list = std::make_shared<List>();
+    skipWhitespace();
+    if (peek() == ']') {
+        advance();
+        return list;
+    }
+
+    while (true) {
+        list->elements.push_back(parse());
+        skipWhitespace();
+        if (peek() == ']') {
+            advance();
+            break;
+        }
+        consume(',');
+    }
+    return list;
+  }
+
+  std::string parseStringVal() {
+      consume('"');
+      std::string res;
+      while (!isAtEnd() && peek() != '"') {
+          char c = advance();
+          if (c == '\\') {
+              if (isAtEnd()) throw std::runtime_error("Unterminated string escape");
+              char next = advance();
+              switch (next) {
+                  case '"': res += '"'; break;
+                  case '\\': res += '\\'; break;
+                  case '/': res += '/'; break;
+                  case 'b': res += '\b'; break;
+                  case 'f': res += '\f'; break;
+                  case 'n': res += '\n'; break;
+                  case 'r': res += '\r'; break;
+                  case 't': res += '\t'; break;
+                  case 'u': 
+                      // skip unicode implementation for brevity
+                      advance(); advance(); advance(); advance(); 
+                      res += '?'; 
+                      break; 
+                  default: res += next; break;
+              }
+          } else {
+              res += c;
+          }
+      }
+      consume('"');
+      return res;
+  }
+  
+  Value parseString() {
+      return parseStringVal();
+  }
+
+  Value parseNumber() {
+    size_t start = current;
+    if (peek() == '-') advance();
+    while (isdigit(peek())) advance();
+    if (peek() == '.') {
+        advance();
+        while (isdigit(peek())) advance();
+    }
+    // scientific notation not supported for simplicity
+    std::string numStr = src.substr(start, current - start);
+    return std::stod(numStr);
+  }
+
+  Value parseTrue() {
+    consume('t'); consume('r'); consume('u'); consume('e');
+    return true;
+  }
+  Value parseFalse() {
+    consume('f'); consume('a'); consume('l'); consume('s'); consume('e');
+    return false;
+  }
+  Value parseNull() {
+    consume('n'); consume('u'); consume('l'); consume('l');
+    return std::monostate{};
+  }
+
+  void consume(char c) {
+    if (peek() == c) {
+        advance();
+    } else {
+        throw std::runtime_error("Expected '" + std::string(1, c) + "'");
+    }
+  }
+
+  void skipWhitespace() {
+    while (!isAtEnd() && isspace(peek())) advance();
+  }
+
+  char peek() {
+    if (isAtEnd()) return '\0';
+    return src[current];
+  }
+
+  char advance() {
+    if (isAtEnd()) return '\0';
+    return src[current++];
+  }
+
+  bool isAtEnd() { return current >= src.size(); }
+};
+
+static Value nativeJsonParse(const std::vector<Value> &args) {
+  if (auto s = std::get_if<std::string>(&args[0])) {
+    try {
+        JsonParser parser(*s);
+        return parser.parse();
+    } catch (const std::exception& e) {
+        return std::monostate{}; // return nil on error
+    }
+  }
+  return std::monostate{};
+}
+
+void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr exports) {
+  auto defineNative = [&](const std::string &name, std::function<Value(const std::vector<Value>&)> func, size_t arity) {
+      auto native = std::make_shared<NativeFunctionObject>();
+      native->name = name;
+      native->func = func;
+      native->arity = arity;
+      native->variadic = false;
+      exports->values[name] = native;
+  };
+
+  if (moduleId == "@std.time") {
+    defineNative("now", nativeTimeNow, 0);
+    defineNative("sleep", nativeTimeSleep, 1);
+  } else if (moduleId == "@std.os") {
+    defineNative("name", nativeOsName, 0);
+    defineNative("cwd", nativeOsCwd, 0);
+    defineNative("env", nativeOsEnv, 1);
+    defineNative("exit", nativeOsExit, 1);
+  } else if (moduleId == "@std.json") {
+      defineNative("stringify", nativeJsonStringify, 1);
+      defineNative("parse", nativeJsonParse, 1);
+  } else if (moduleId == "@std.io") {
+      defineNative("input", nativeIoInput, 0);
+  }
 }

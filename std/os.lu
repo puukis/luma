@@ -1,11 +1,37 @@
 module @std.os
 
-// Placeholder OS module
+// Standard OS module
+// Backend: Native C++ implementation
 
+// Returns the name of the operating system.
+// native def name()
 open def name() {
-  return "Windows" // Simplified for now
+  return "Unknown"
 }
 
+// Returns the current working directory.
+// native def cwd()
 open def cwd() {
-  return "." 
+  return ""
+}
+
+// Returns the value of an environment variable, or nil.
+// native def env(key)
+open def env(key) {
+    return nil
+}
+
+// Exits the program with the given status code.
+// native def exit(code)
+open def exit(code) {
+    return nil
+}
+
+// helper
+use @std.io as io
+
+// Prints an error message and exits with code 1.
+open def fail(msg) {
+    io.println("Error: " + msg)
+    exit(1)
 }
