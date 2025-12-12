@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <iomanip>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -24,12 +25,41 @@ struct Function {
 using FunctionPtr = std::shared_ptr<Function>;
 struct List; // Forward decl
 using ListPtr = std::shared_ptr<List>;
+struct LumaClass;
+using ClassPtr = std::shared_ptr<LumaClass>;
+struct LumaInstance;
+using InstancePtr = std::shared_ptr<LumaInstance>;
+struct LumaMap;
+using MapPtr = std::shared_ptr<LumaMap>;
 
-using Value = std::variant<std::monostate, double, std::string, bool,
-                           FunctionPtr, ListPtr>; // monostate = nil
+using Value =
+    std::variant<std::monostate, double, std::string, bool, FunctionPtr,
+                 ListPtr, ClassPtr, InstancePtr, MapPtr>; // monostate = nil
 
 struct List {
   std::vector<Value> elements;
+};
+
+struct LumaMap {
+  std::map<std::string, Value> values;
+};
+
+struct LumaClass {
+  std::string name;
+  std::map<std::string, FunctionPtr> methods;
+
+  FunctionPtr findMethod(const std::string &name) {
+    if (methods.count(name))
+      return methods.at(name);
+    return nullptr;
+  }
+};
+
+struct LumaInstance {
+  ClassPtr klass;
+  std::map<std::string, Value> fields;
+
+  LumaInstance(ClassPtr k) : klass(k) {}
 };
 
 inline bool isNil(const Value &v) {
@@ -41,7 +71,8 @@ inline bool isTruthy(const Value &v) {
     return false;
   if (auto b = std::get_if<bool>(&v))
     return *b;
-  return true; // numbers, strings, functions, lists are truthy
+  return true; // numbers, strings, functions, lists, classes, instances, maps
+               // are truthy
 }
 
 inline std::string numberToString(double d) {
@@ -87,6 +118,25 @@ inline std::string valueToString(const Value &v) {
     s += "]";
     return s;
   }
+  if (auto c = std::get_if<ClassPtr>(&v)) {
+    return "<class " + (*c)->name + ">";
+  }
+  if (auto i = std::get_if<InstancePtr>(&v)) {
+    return "<instance " + (*i)->klass->name + ">";
+  }
+  if (auto m = std::get_if<MapPtr>(&v)) {
+    std::string s = "{";
+    const auto &map = (*m)->values;
+    int k = 0;
+    for (const auto &[key, val] : map) {
+      if (k > 0)
+        s += ", ";
+      s += key + ": " + valueToString(val);
+      k++;
+    }
+    s += "}";
+    return s;
+  }
   return "<value>";
 }
 
@@ -108,5 +158,11 @@ inline bool valuesEqual(const Value &a, const Value &b) {
   if (auto la = std::get_if<ListPtr>(&a))
     return la->get() ==
            std::get<ListPtr>(b).get(); // pointer equality for lists
+  if (auto ca = std::get_if<ClassPtr>(&a))
+    return ca->get() == std::get<ClassPtr>(b).get();
+  if (auto ia = std::get_if<InstancePtr>(&a))
+    return ia->get() == std::get<InstancePtr>(b).get();
+  if (auto ma = std::get_if<MapPtr>(&a))
+    return ma->get() == std::get<MapPtr>(b).get();
   return false;
 }

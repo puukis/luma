@@ -27,17 +27,37 @@ void Interpreter::assignOrDefine(const Token &name, Value value) {
 
 void Interpreter::executeBlock(const BlockStmt &block,
                                std::shared_ptr<Environment> newEnv) {
-  auto previous = env_;
-  env_ = std::move(newEnv);
+  std::shared_ptr<Environment> previous = env_;
   try {
-    for (const auto &s : block.statements) {
-      execute(*s);
+    env_ = newEnv;
+    for (const auto &stmt : block.statements) {
+      execute(*stmt);
     }
   } catch (...) {
     env_ = previous;
     throw;
   }
   env_ = previous;
+}
+
+void Interpreter::visitClassStmt(const ClassStmt &stmt) {
+  env_->define(stmt.name.lexeme, std::monostate{});
+
+  std::map<std::string, FunctionPtr> methods;
+  for (const auto &method : stmt.methods) {
+    auto func = std::make_shared<Function>();
+    func->name = method->name;
+    func->params = method->params;
+    func->body = method->body.get();
+    func->closure = env_; // Closure captures defining scope
+    methods[method->name.lexeme] = func;
+  }
+
+  auto klass = std::make_shared<LumaClass>();
+  klass->name = stmt.name.lexeme;
+  klass->methods = std::move(methods);
+
+  env_->assign(stmt.name, klass);
 }
 
 void Interpreter::execute(const Stmt &stmt) {
@@ -117,6 +137,11 @@ void Interpreter::execute(const Stmt &stmt) {
     return;
   }
 
+  if (auto *c = dynamic_cast<const ClassStmt *>(&stmt)) {
+    visitClassStmt(*c);
+    return;
+  }
+
   // ========== Luma Unique Statements ==========
 
   // echo N { ... } - repeat block N times
@@ -172,31 +197,78 @@ static void requireNumber(const Value &v, const std::string &where) {
   }
 }
 
-Value Interpreter::callFunction(const FunctionPtr &fn,
+Value Interpreter::callFunction(const Value &callee,
                                 const std::vector<Value> &args,
                                 const Token &callSiteParen) {
-  if (args.size() != fn->arity()) {
-    throw std::runtime_error("Arity error at line " +
-                             std::to_string(callSiteParen.line) +
-                             ": function '" + fn->name.lexeme + "' expected " +
-                             std::to_string(fn->arity()) + " args, got " +
-                             std::to_string(args.size()));
+  if (auto fn = std::get_if<FunctionPtr>(&callee)) {
+    FunctionPtr function = *fn;
+    if (args.size() != function->arity()) {
+      throw std::runtime_error("Expected " + std::to_string(function->arity()) +
+                               " arguments but got " +
+                               std::to_string(args.size()) + ".");
+    }
+
+    auto environment = std::make_shared<Environment>(function->closure);
+    for (size_t i = 0; i < function->params.size(); ++i) {
+      environment->define(function->params[i].lexeme, args[i]);
+    }
+
+    try {
+      executeBlock(*function->body, environment);
+    } catch (const ReturnSignal &returnValue) {
+      return returnValue.value;
+    }
+    return std::monostate{};
   }
 
-  auto callEnv = std::make_shared<Environment>(fn->closure);
-  for (size_t i = 0; i < args.size(); i++) {
-    callEnv->define(fn->params[i].lexeme, args[i]);
+  if (auto klass = std::get_if<ClassPtr>(&callee)) {
+    // Create instance
+    auto instance = std::make_shared<LumaInstance>(*klass);
+
+    // Look for definition of "init"
+    FunctionPtr init = (*klass)->findMethod("init");
+    if (init) {
+      // Bind 'this' to init
+      // We need to bind 'this' to the method call.
+      // Current implementation of Function doesn't support 'this' binding
+      // implicitly? We need a way to bind 'this'. Standard Lox way:
+      // Function.bind(instance) -> new Function with environment containing
+      // "this".
+
+      auto environment = std::make_shared<Environment>(init->closure);
+      environment->define("this", instance); // Bind 'this'
+
+      // Handle args
+      if (args.size() != init->arity()) {
+        throw std::runtime_error("Expected " + std::to_string(init->arity()) +
+                                 " arguments but got " +
+                                 std::to_string(args.size()) + ".");
+      }
+      for (size_t i = 0; i < init->params.size(); ++i) {
+        environment->define(init->params[i].lexeme, args[i]);
+      }
+
+      try {
+        executeBlock(*init->body, environment);
+      } catch (const ReturnSignal &returnValue) {
+        // initializer usually returns 'this', but if user returns something
+        // else? Lox: always return this. Luma: let's return this implicitly
+        // unless explicit return? For now, ignore return value of init and
+        // return instance? Or allow explicit return? Lox ignores explicit
+        // return in init. Let's mimic Lox: init returns 'this'.
+      }
+    } else {
+      if (!args.empty()) {
+        throw std::runtime_error("Expected 0 arguments but got " +
+                                 std::to_string(args.size()) + ".");
+      }
+    }
+
+    return instance;
   }
 
-  try {
-    executeBlock(*fn->body, callEnv);
-  } catch (const ReturnSignal &rs) {
-    return rs.value;
-  }
-
-  return std::monostate{}; // nil if no return
+  throw std::runtime_error("Can only call functions and classes.");
 }
-
 Value Interpreter::evaluate(const Expr &expr) {
   if (auto *l = dynamic_cast<const LiteralExpr *>(&expr)) {
     switch (l->kind) {
@@ -221,16 +293,13 @@ Value Interpreter::evaluate(const Expr &expr) {
 
   if (auto *u = dynamic_cast<const UnaryExpr *>(&expr)) {
     Value right = evaluate(*u->right);
-
     if (u->op.type == TokenType::Minus) {
       requireNumber(right, "unary '-'");
       return -std::get<double>(right);
     }
-
     if (u->op.type == TokenType::Bang) {
       return !isTruthy(right);
     }
-
     throw std::runtime_error("Unknown unary operator '" + u->op.lexeme + "'");
   }
 
@@ -250,50 +319,40 @@ Value Interpreter::evaluate(const Expr &expr) {
       }
       throw std::runtime_error(
           "Type error: '+' needs (number,number) or (string,string).");
-
     case TokenType::Minus:
       requireNumber(left, "binary '-'");
       requireNumber(right, "binary '-'");
       return std::get<double>(left) - std::get<double>(right);
-
     case TokenType::Star:
       requireNumber(left, "binary '*'");
       requireNumber(right, "binary '*'");
       return std::get<double>(left) * std::get<double>(right);
-
     case TokenType::Slash:
       requireNumber(left, "binary '/'");
       requireNumber(right, "binary '/'");
       if (std::get<double>(right) == 0.0)
         throw std::runtime_error("Runtime error: division by zero.");
       return std::get<double>(left) / std::get<double>(right);
-
     case TokenType::Greater:
       requireNumber(left, "comparison");
       requireNumber(right, "comparison");
       return std::get<double>(left) > std::get<double>(right);
-
     case TokenType::GreaterEqual:
       requireNumber(left, "comparison");
       requireNumber(right, "comparison");
       return std::get<double>(left) >= std::get<double>(right);
-
     case TokenType::Less:
       requireNumber(left, "comparison");
       requireNumber(right, "comparison");
       return std::get<double>(left) < std::get<double>(right);
-
     case TokenType::LessEqual:
       requireNumber(left, "comparison");
       requireNumber(right, "comparison");
       return std::get<double>(left) <= std::get<double>(right);
-
     case TokenType::EqualEqual:
       return valuesEqual(left, right);
-
     case TokenType::BangEqual:
       return !valuesEqual(left, right);
-
     default:
       throw std::runtime_error("Unknown binary operator '" + b->op.lexeme +
                                "'");
@@ -302,19 +361,73 @@ Value Interpreter::evaluate(const Expr &expr) {
 
   if (auto *c = dynamic_cast<const CallExpr *>(&expr)) {
     Value callee = evaluate(*c->callee);
-
     std::vector<Value> args;
     args.reserve(c->args.size());
     for (const auto &a : c->args)
       args.push_back(evaluate(*a));
 
-    if (!std::holds_alternative<FunctionPtr>(callee)) {
-      throw std::runtime_error("Type error at line " +
-                               std::to_string(c->paren.line) +
-                               ": can only call functions.");
+    if (std::holds_alternative<FunctionPtr>(callee) ||
+        std::holds_alternative<ClassPtr>(callee)) {
+      return callFunction(callee, args, c->paren);
+    }
+    throw std::runtime_error("Can only call functions and classes.");
+  }
+
+  if (auto *indexExpr = dynamic_cast<const IndexExpr *>(&expr)) {
+    Value object = evaluate(*indexExpr->object);
+    Value index = evaluate(*indexExpr->index);
+
+    if (auto listPtr = std::get_if<ListPtr>(&object)) {
+      if (!std::holds_alternative<double>(index)) {
+        throw std::runtime_error("List index must be a number.");
+      }
+      int idx = static_cast<int>(std::get<double>(index));
+      auto &elements = (*listPtr)->elements;
+      if (idx < 0 || idx >= static_cast<int>(elements.size())) {
+        throw std::runtime_error("List index out of bounds.");
+      }
+      return elements[idx];
     }
 
-    return callFunction(std::get<FunctionPtr>(callee), args, c->paren);
+    if (auto mapPtr = std::get_if<MapPtr>(&object)) {
+      if (auto s = std::get_if<std::string>(&index)) {
+        auto &values = (*mapPtr)->values;
+        if (values.count(*s)) {
+          return values.at(*s);
+        }
+        throw std::runtime_error("Undefined key '" + *s + "'.");
+      }
+      throw std::runtime_error("Map key must be a string.");
+    }
+    throw std::runtime_error("Only lists and maps support subscription.");
+  }
+
+  if (auto *indexSetExpr = dynamic_cast<const IndexSetExpr *>(&expr)) {
+    Value object = evaluate(*indexSetExpr->object);
+    Value index = evaluate(*indexSetExpr->index);
+    Value value = evaluate(*indexSetExpr->value);
+
+    if (auto listPtr = std::get_if<ListPtr>(&object)) {
+      if (!std::holds_alternative<double>(index)) {
+        throw std::runtime_error("List index must be a number.");
+      }
+      int idx = static_cast<int>(std::get<double>(index));
+      auto &elements = (*listPtr)->elements;
+      if (idx < 0 || idx >= static_cast<int>(elements.size())) {
+        throw std::runtime_error("List index out of bounds.");
+      }
+      elements[idx] = value;
+      return value;
+    }
+
+    if (auto mapPtr = std::get_if<MapPtr>(&object)) {
+      if (auto s = std::get_if<std::string>(&index)) {
+        (*mapPtr)->values[*s] = value;
+        return value;
+      }
+      throw std::runtime_error("Map key must be a string.");
+    }
+    throw std::runtime_error("Only lists and maps support assignment.");
   }
 
   if (auto *listExpr = dynamic_cast<const ListExpr *>(&expr)) {
@@ -325,25 +438,54 @@ Value Interpreter::evaluate(const Expr &expr) {
     return list;
   }
 
-  if (auto *getExpr = dynamic_cast<const GetExpr *>(&expr)) {
-    Value object = evaluate(*getExpr->object);
-    Value index = evaluate(*getExpr->index);
-
-    if (auto l = std::get_if<ListPtr>(&object)) {
-      if (!std::holds_alternative<double>(index)) {
-        throw std::runtime_error("List index must be a number.");
+  if (auto get = dynamic_cast<const GetExpr *>(&expr)) {
+    Value object = evaluate(*get->object);
+    if (auto inst = std::get_if<InstancePtr>(&object)) {
+      LumaInstance *instance = inst->get();
+      if (instance->fields.count(get->name.lexeme)) {
+        return instance->fields.at(get->name.lexeme);
       }
-      int idx = static_cast<int>(std::get<double>(index));
-      auto &elems = (*l)->elements;
-      if (idx < 0 || idx >= static_cast<int>(elems.size())) {
-        throw std::runtime_error("List index out of bounds: " +
-                                 std::to_string(idx));
+      FunctionPtr method = instance->klass->findMethod(get->name.lexeme);
+      if (method) {
+        auto newEnv = std::make_shared<Environment>(method->closure);
+        newEnv->define("this", *inst);
+        auto boundMethod = std::make_shared<Function>(*method);
+        boundMethod->closure = newEnv;
+        return boundMethod;
       }
-      return elems[idx];
+      throw std::runtime_error("Undefined property '" + get->name.lexeme +
+                               "'.");
     }
-
-    throw std::runtime_error("Only lists support subscription.");
+    throw std::runtime_error("Only instances have properties.");
   }
 
-  throw std::runtime_error("Unknown expression at runtime.");
+  if (auto set = dynamic_cast<const SetExpr *>(&expr)) {
+    Value object = evaluate(*set->object);
+    if (auto inst = std::get_if<InstancePtr>(&object)) {
+      Value value = evaluate(*set->value);
+      (*inst)->fields[set->name.lexeme] = value;
+      return value;
+    }
+    throw std::runtime_error("Only instances have properties.");
+  }
+
+  if (auto th = dynamic_cast<const ThisExpr *>(&expr)) {
+    return env_->get(th->keyword);
+  }
+
+  if (auto mp = dynamic_cast<const MapExpr *>(&expr)) {
+    auto map = std::make_shared<LumaMap>();
+    for (size_t i = 0; i < mp->keys.size(); ++i) {
+      Value k = evaluate(*mp->keys[i]);
+      Value v = evaluate(*mp->values[i]);
+      if (auto s = std::get_if<std::string>(&k)) {
+        map->values[*s] = v;
+      } else {
+        throw std::runtime_error("Map keys must be strings.");
+      }
+    }
+    return map;
+  }
+
+  throw std::runtime_error("Unknown expression type.");
 }

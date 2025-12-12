@@ -83,10 +83,47 @@ struct ListExpr : Expr {
 
 struct GetExpr : Expr {
   ExprPtr object;
-  Token bracket; // The '['
+  Token name;
+  explicit GetExpr(ExprPtr o, Token n)
+      : object(std::move(o)), name(std::move(n)) {}
+};
+
+struct IndexExpr : Expr {
+  ExprPtr object;
+  Token bracket;
   ExprPtr index;
-  GetExpr(ExprPtr o, Token b, ExprPtr i)
+  IndexExpr(ExprPtr o, Token b, ExprPtr i)
       : object(std::move(o)), bracket(std::move(b)), index(std::move(i)) {}
+};
+
+struct IndexSetExpr : Expr {
+  ExprPtr object;
+  Token bracket;
+  ExprPtr index;
+  ExprPtr value;
+  IndexSetExpr(ExprPtr o, Token b, ExprPtr i, ExprPtr v)
+      : object(std::move(o)), bracket(std::move(b)), index(std::move(i)),
+        value(std::move(v)) {}
+};
+
+struct SetExpr : Expr {
+  ExprPtr object;
+  Token name;
+  ExprPtr value;
+  SetExpr(ExprPtr o, Token n, ExprPtr v)
+      : object(std::move(o)), name(std::move(n)), value(std::move(v)) {}
+};
+
+struct ThisExpr : Expr {
+  Token keyword;
+  explicit ThisExpr(Token k) : keyword(std::move(k)) {}
+};
+
+struct MapExpr : Expr {
+  std::vector<ExprPtr> keys;
+  std::vector<ExprPtr> values;
+  MapExpr(std::vector<ExprPtr> k, std::vector<ExprPtr> v)
+      : keys(std::move(k)), values(std::move(v)) {}
 };
 
 // ---------- Statements ----------
@@ -153,6 +190,13 @@ struct FuncDefStmt : Stmt {
   std::unique_ptr<BlockStmt> body;
   FuncDefStmt(Token n, std::vector<Token> p, std::unique_ptr<BlockStmt> b)
       : name(std::move(n)), params(std::move(p)), body(std::move(b)) {}
+};
+
+struct ClassStmt : Stmt {
+  Token name;
+  std::vector<std::shared_ptr<FuncDefStmt>> methods;
+  ClassStmt(Token n, std::vector<std::shared_ptr<FuncDefStmt>> m)
+      : name(std::move(n)), methods(std::move(m)) {}
 };
 
 // ========== Luma Unique Statements ==========

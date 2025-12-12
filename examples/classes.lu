@@ -1,0 +1,22 @@
+class Calculator {
+  def init(start) {
+    this.value = start
+  }
+  def add(n) {
+    this.value = this.value + n
+  }
+  def result() {
+    return this.value
+  }
+}
+
+c = Calculator(10)
+c.add(5)
+print("Calculator result (should be 15):")
+print(c.result())
+print("Field access (should be 15):")
+print(c.value)
+
+c.value = 100
+print("After modification (should be 100):")
+print(c.result())

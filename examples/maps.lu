@@ -1,0 +1,18 @@
+m = { "a": 1, "b": 20 }
+print("Map access 'a' (should be 1):")
+print(m["a"])
+
+m["b"] = 50
+print("Map access 'b' (should be 50):")
+print(m["b"])
+
+print("Map access 'c' (missing, should error or crash if not handled):")
+maybe {
+  print(m["c"])
+} otherwise {
+  print("Correctly caught missing key error!")
+}
+
+print("New key assignment:")
+m["new"] = 999
+print(m["new"])

@@ -14,6 +14,26 @@ std::string AstPrinter::print(const std::vector<StmtPtr> &program) {
 std::string AstPrinter::stmtToString(const Stmt &s) {
   std::ostringstream out;
 
+  if (auto *c = dynamic_cast<const ClassStmt *>(&s)) {
+    out << ind() << "class " << c->name.lexeme << " {\n";
+    indent_++;
+    for (const auto &m : c->methods) {
+      // reuse FuncDefStmt logic but need to handle shared_ptr
+      // FuncDefStmt logic:
+      out << ind() << "def " << m->name.lexeme << "(";
+      for (size_t k = 0; k < m->params.size(); k++) {
+        if (k)
+          out << ", ";
+        out << m->params[k].lexeme;
+      }
+      out << ") ";
+      out << stmtToString(*m->body);
+    }
+    indent_--;
+    out << ind() << "}\n";
+    return out.str();
+  }
+
   if (auto *x = dynamic_cast<const ExprStmt *>(&s)) {
     out << ind() << exprToString(*x->expr) << "\n";
     return out.str();
@@ -172,7 +192,35 @@ std::string AstPrinter::exprToString(const Expr &e) {
   }
 
   if (auto *g = dynamic_cast<const GetExpr *>(&e)) {
-    out << exprToString(*g->object) << "[" << exprToString(*g->index) << "]";
+    out << exprToString(*g->object) << "." << g->name.lexeme;
+    return out.str();
+  }
+
+  if (auto *i = dynamic_cast<const IndexExpr *>(&e)) {
+    out << exprToString(*i->object) << "[" << exprToString(*i->index) << "]";
+    return out.str();
+  }
+
+  if (auto *s = dynamic_cast<const SetExpr *>(&e)) {
+    // SetExpr is usually an expression in AST? Or only stmt?
+    // It's an Expr.
+    out << exprToString(*s->object) << "." << s->name.lexeme << " = "
+        << exprToString(*s->value);
+    return out.str();
+  }
+
+  if (auto *t = dynamic_cast<const ThisExpr *>(&e)) {
+    return "this";
+  }
+
+  if (auto *m = dynamic_cast<const MapExpr *>(&e)) {
+    out << "{";
+    for (size_t k = 0; k < m->keys.size(); k++) {
+      if (k > 0)
+        out << ", ";
+      out << exprToString(*m->keys[k]) << " = " << exprToString(*m->values[k]);
+    }
+    out << "}";
     return out.str();
   }
 

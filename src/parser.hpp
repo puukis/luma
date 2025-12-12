@@ -19,6 +19,7 @@ private:
 
   // statements
   StmtPtr declaration();
+  StmtPtr classDeclaration();
   StmtPtr statement();
   StmtPtr printStatement();
   StmtPtr ifStatement();

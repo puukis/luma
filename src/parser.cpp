@@ -18,6 +18,8 @@ std::vector<StmtPtr> Parser::parse() {
 StmtPtr Parser::declaration() {
   if (match({TokenType::Def}))
     return functionDeclaration();
+  if (match({TokenType::Class}))
+    return classDeclaration();
   return statement();
 }
 
@@ -52,26 +54,30 @@ StmtPtr Parser::untilStatement() {
 // ... (skipping to call()) ...
 
 ExprPtr Parser::call() {
-  auto expr = primary();
+  ExprPtr expr = primary();
 
   while (true) {
     if (match({TokenType::LeftParen})) {
       std::vector<ExprPtr> args;
+      Token paren = previous(); // use '(' as location
       if (!check(TokenType::RightParen)) {
         do {
           args.push_back(expression());
         } while (match({TokenType::Comma}));
       }
-      Token paren =
-          consume(TokenType::RightParen, "Expected ')' after arguments.");
-      expr =
-          std::make_unique<CallExpr>(std::move(expr), paren, std::move(args));
+      consume(TokenType::RightParen, "Expected ')' after arguments.");
+      expr = std::make_unique<CallExpr>(std::move(expr), std::move(paren),
+                                        std::move(args));
+    } else if (match({TokenType::Dot})) {
+      Token name =
+          consume(TokenType::Identifier, "Expected property name after '.'.");
+      expr = std::make_unique<GetExpr>(std::move(expr), std::move(name));
     } else if (match({TokenType::LeftBracket})) {
       Token bracket = previous();
       auto index = expression();
       consume(TokenType::RightBracket, "Expected ']' after index.");
-      expr =
-          std::make_unique<GetExpr>(std::move(expr), bracket, std::move(index));
+      expr = std::make_unique<IndexExpr>(std::move(expr), std::move(bracket),
+                                         std::move(index));
     } else {
       break;
     }
@@ -116,6 +122,10 @@ ExprPtr Parser::primary() {
     return std::make_unique<VariableExpr>(previous());
   }
 
+  if (match({TokenType::This})) {
+    return std::make_unique<ThisExpr>(previous());
+  }
+
   // Bracket for List Literals: [1, 2, 3]
   if (match({TokenType::LeftBracket})) {
     std::vector<ExprPtr> elements;
@@ -126,6 +136,22 @@ ExprPtr Parser::primary() {
     }
     consume(TokenType::RightBracket, "Expected ']' after list elements.");
     return std::make_unique<ListExpr>(std::move(elements));
+  }
+
+  // Brace for Map Literals: { "key": val, ... }
+  if (match({TokenType::LeftBrace})) {
+    std::vector<ExprPtr> keys;
+    std::vector<ExprPtr> values;
+    if (!check(TokenType::RightBrace)) {
+      do {
+        keys.push_back(expression());
+        // I will use `Colon` (:) since I added it.
+        consume(TokenType::Colon, "Expected ':' in map entry.");
+        values.push_back(expression());
+      } while (match({TokenType::Comma}));
+    }
+    consume(TokenType::RightBrace, "Expected '}' after map entries.");
+    return std::make_unique<MapExpr>(std::move(keys), std::move(values));
   }
 
   if (match({TokenType::LeftParen})) {
@@ -154,6 +180,38 @@ StmtPtr Parser::functionDeclaration() {
   auto body = block();
   return std::make_unique<FuncDefStmt>(name, std::move(params),
                                        std::move(body));
+}
+
+StmtPtr Parser::classDeclaration() {
+  Token name = consume(TokenType::Identifier, "Expected class name.");
+  consume(TokenType::LeftBrace, "Expected '{' before class body.");
+
+  std::vector<std::shared_ptr<FuncDefStmt>> methods;
+  while (!check(TokenType::RightBrace) && !isAtEnd()) {
+    consume(TokenType::Def, "Expected 'def' to define method.");
+    // Reuse functionDeclaration logic but cast to shared_ptr or copy logic?
+    // functionDeclaration returns unique_ptr<Stmt>, explicitly FuncDefStmt
+    // inside. I can't easily reuse it if it returns StmtPtr (unique_ptr<Stmt>).
+    // Let's copy logic or Refactor?
+    // Refactoring is safer. But wait, `functionDeclaration` returns `StmtPtr`
+    // which is `unique_ptr<Stmt>`. I can cast it.
+    auto stmt = functionDeclaration();
+    // And I need shared_ptr<FuncDefStmt>.
+    // unique_ptr can be moved to shared_ptr.
+    // And dynamic_cast?
+    // Let's just inline the logic for now or simple reuse.
+    // If I cast unique_ptr<Stmt> to unique_ptr<FuncDefStmt>...
+    // Stmt has virtual destructor, so RTTI works.
+
+    // cast:
+    auto funcStmt = std::unique_ptr<FuncDefStmt>(
+        static_cast<FuncDefStmt *>(stmt.release()));
+    methods.push_back(std::move(funcStmt));
+  }
+
+  consume(TokenType::RightBrace, "Expected '}' after class body.");
+
+  return std::make_unique<ClassStmt>(name, methods);
 }
 
 StmtPtr Parser::printStatement() {
@@ -230,30 +288,37 @@ StmtPtr Parser::maybeStatement() {
 }
 
 StmtPtr Parser::assignmentOrExprStatement() {
-  // Lookahead for: IDENT '=' ... OR IDENT '<->' IDENT
-  if (check(TokenType::Identifier)) {
-    // Check for swap: IDENT <-> IDENT
-    if (current_ + 1 < tokens_.size() &&
-        tokens_[current_ + 1].type == TokenType::Swap) {
-      Token left = advance(); // first IDENT
-      advance();              // '<->'
-      Token right = consume(TokenType::Identifier,
-                            "Expected identifier after '<->' swap operator.");
+  auto expr = expression();
+
+  if (match({TokenType::Swap})) {
+    if (auto v = dynamic_cast<VariableExpr *>(expr.get())) {
+      Token right =
+          consume(TokenType::Identifier, "Expected identifier after '<->'.");
       match({TokenType::Semicolon});
-      return std::make_unique<SwapStmt>(left, right);
+      return std::make_unique<SwapStmt>(v->name, right);
     }
-    // Check for assignment: IDENT = expr
-    if (current_ + 1 < tokens_.size() &&
-        tokens_[current_ + 1].type == TokenType::Equal) {
-      Token name = advance(); // IDENT
-      advance();              // '='
-      auto value = expression();
-      match({TokenType::Semicolon});
-      return std::make_unique<VarAssignStmt>(name, std::move(value));
-    }
+    throw error(previous(), "Invalid swap target.");
   }
 
-  auto expr = expression();
+  if (match({TokenType::Equal})) {
+    auto value = expression();
+    match({TokenType::Semicolon});
+
+    if (auto v = dynamic_cast<VariableExpr *>(expr.get())) {
+      return std::make_unique<VarAssignStmt>(v->name, std::move(value));
+    }
+    if (auto get = dynamic_cast<GetExpr *>(expr.get())) {
+      return std::make_unique<ExprStmt>(std::make_unique<SetExpr>(
+          std::move(get->object), get->name, std::move(value)));
+    }
+    if (auto idx = dynamic_cast<IndexExpr *>(expr.get())) {
+      return std::make_unique<ExprStmt>(std::make_unique<IndexSetExpr>(
+          std::move(idx->object), idx->bracket, std::move(idx->index),
+          std::move(value)));
+    }
+    throw error(previous(), "Invalid assignment target.");
+  }
+
   match({TokenType::Semicolon});
   return std::make_unique<ExprStmt>(std::move(expr));
 }

@@ -29,7 +29,8 @@ private:
 
   // helpers
   void assignOrDefine(const Token &name, Value value);
+  void visitClassStmt(const ClassStmt &stmt);
 
-  Value callFunction(const FunctionPtr &fn, const std::vector<Value> &args,
+  Value callFunction(const Value &callee, const std::vector<Value> &args,
                      const Token &callSiteParen);
 };

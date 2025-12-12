@@ -10,6 +10,7 @@ enum class TokenType {
   Comma,
   Dot,
   Semicolon,
+  Colon,        // :
   LeftBracket,  // [
   RightBracket, // ]
 
@@ -40,6 +41,8 @@ enum class TokenType {
   If,
   Else,
   While,
+  Class, // Class definition
+  This,  // 'this' keyword
   True,
   False,
   Nil,
@@ -68,6 +71,8 @@ inline const char *tokenTypeName(TokenType t) {
     return "Dot";
   case TokenType::Semicolon:
     return "Semicolon";
+  case TokenType::Colon:
+    return "Colon";
   case TokenType::LeftBracket:
     return "LeftBracket";
   case TokenType::RightBracket:
@@ -114,6 +119,10 @@ inline const char *tokenTypeName(TokenType t) {
     return "Else";
   case TokenType::While:
     return "While";
+  case TokenType::Class:
+    return "Class";
+  case TokenType::This:
+    return "This";
   case TokenType::True:
     return "True";
   case TokenType::False:
