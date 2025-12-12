@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 
+// Visibility for module exports
+enum class Visibility { Open, Closed };
+
 // ---------- Expressions ----------
 struct Expr {
   virtual ~Expr() = default;
@@ -188,15 +191,20 @@ struct FuncDefStmt : Stmt {
   Token name;
   std::vector<Token> params;
   std::unique_ptr<BlockStmt> body;
-  FuncDefStmt(Token n, std::vector<Token> p, std::unique_ptr<BlockStmt> b)
-      : name(std::move(n)), params(std::move(p)), body(std::move(b)) {}
+  Visibility visibility = Visibility::Closed;
+  FuncDefStmt(Token n, std::vector<Token> p, std::unique_ptr<BlockStmt> b,
+              Visibility vis = Visibility::Closed)
+      : name(std::move(n)), params(std::move(p)), body(std::move(b)),
+        visibility(vis) {}
 };
 
 struct ClassStmt : Stmt {
   Token name;
   std::vector<std::shared_ptr<FuncDefStmt>> methods;
-  ClassStmt(Token n, std::vector<std::shared_ptr<FuncDefStmt>> m)
-      : name(std::move(n)), methods(std::move(m)) {}
+  Visibility visibility = Visibility::Closed;
+  ClassStmt(Token n, std::vector<std::shared_ptr<FuncDefStmt>> m,
+            Visibility vis = Visibility::Closed)
+      : name(std::move(n)), methods(std::move(m)), visibility(vis) {}
 };
 
 // ========== Luma Unique Statements ==========
@@ -222,4 +230,21 @@ struct MaybeStmt : Stmt {
   std::unique_ptr<BlockStmt> otherwiseBlock; // may be null
   MaybeStmt(std::unique_ptr<BlockStmt> t, std::unique_ptr<BlockStmt> o)
       : tryBlock(std::move(t)), otherwiseBlock(std::move(o)) {}
+};
+
+// ========== Module System Statements ==========
+
+// module @std.io - declares the module identity
+struct ModuleStmt : Stmt {
+  std::vector<Token> moduleIdParts; // e.g., [@, std, ., io]
+  explicit ModuleStmt(std::vector<Token> parts)
+      : moduleIdParts(std::move(parts)) {}
+};
+
+// use @std.io as io - imports a module
+struct UseStmt : Stmt {
+  std::vector<Token> moduleIdParts;
+  Token alias;
+  UseStmt(std::vector<Token> parts, Token a)
+      : moduleIdParts(std::move(parts)), alias(std::move(a)) {}
 };

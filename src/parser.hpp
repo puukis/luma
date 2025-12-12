@@ -20,7 +20,6 @@ private:
 
   // statements
   StmtPtr declaration();
-  StmtPtr classDeclaration();
   StmtPtr statement();
   StmtPtr printStatement();
   StmtPtr ifStatement();
@@ -28,11 +27,17 @@ private:
   StmtPtr untilStatement();
   StmtPtr returnStatement();
   StmtPtr assignmentOrExprStatement();
-  StmtPtr functionDeclaration();
+  StmtPtr functionDeclaration(Visibility vis = Visibility::Closed);
+  StmtPtr classDeclaration(Visibility vis = Visibility::Closed);
 
   // Luma unique statements
   StmtPtr echoStatement();
   StmtPtr maybeStatement();
+
+  // Module system
+  StmtPtr moduleDeclaration();
+  StmtPtr useStatement();
+  std::vector<Token> parseModuleId();
 
   std::unique_ptr<BlockStmt> block();
 

@@ -1,10 +1,53 @@
 #include "interpreter.hpp"
+#include "lexer.hpp"
+#include "parser.hpp"
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
+
+namespace fs = std::filesystem;
 
 Interpreter::Interpreter() {
   globals_ = std::make_shared<Environment>();
   env_ = globals_;
+}
+
+void Interpreter::setEntryFile(const std::string &path) {
+  entryFilePath_ = fs::absolute(path).string();
+  initializeRoots();
+}
+
+void Interpreter::initializeRoots() {
+  if (entryFilePath_.empty())
+    return;
+
+  // Project root: directory containing the entry file, or its parent if in src/
+  fs::path entryPath(entryFilePath_);
+  fs::path entryDir = entryPath.parent_path();
+
+  // Check if we're in a src/ subdirectory
+  if (entryDir.filename() == "src") {
+    projectRoot_ = entryDir.parent_path().string();
+  } else {
+    projectRoot_ = entryDir.string();
+  }
+
+  // Stdlib root: look for std/ relative to project, or fallback to cwd/std
+  fs::path stdPath = fs::path(projectRoot_) / "std";
+  if (fs::exists(stdPath) && fs::is_directory(stdPath)) {
+    stdlibRoot_ = stdPath.string();
+  } else {
+    // Fallback: current working directory / std
+    stdPath = fs::current_path() / "std";
+    if (fs::exists(stdPath) && fs::is_directory(stdPath)) {
+      stdlibRoot_ = stdPath.string();
+    } else {
+      // Last resort: assume std/ is next to the executable (not implemented fully)
+      stdlibRoot_ = (fs::current_path() / "std").string();
+    }
+  }
 }
 
 void Interpreter::run(const std::vector<StmtPtr> &program) {
@@ -184,6 +227,29 @@ void Interpreter::execute(const Stmt &stmt) {
       // If no otherwise block, silently continue (that's the "maybe"
       // philosophy)
     }
+    return;
+  }
+
+  // ========== Module System Statements ==========
+
+  // module @std.io - record current module identity
+  if (auto *mod = dynamic_cast<const ModuleStmt *>(&stmt)) {
+    currentModuleId_ = moduleIdToString(mod->moduleIdParts);
+    // Validate: user code should not declare @std.* modules
+    if (currentModuleId_.rfind("@std.", 0) == 0 && !stdlibRoot_.empty()) {
+      // Check if we're actually in the stdlib directory
+      fs::path currentFile(entryFilePath_);
+      fs::path stdPath(stdlibRoot_);
+      // For now, allow it (stdlib files need to declare their identity)
+    }
+    return;
+  }
+
+  // use @std.io as io - load module and bind to alias
+  if (auto *use = dynamic_cast<const UseStmt *>(&stmt)) {
+    std::string moduleId = moduleIdToString(use->moduleIdParts);
+    MapPtr exports = loadModule(moduleId);
+    env_->define(use->alias.lexeme, exports);
     return;
   }
 
@@ -440,6 +506,17 @@ Value Interpreter::evaluate(const Expr &expr) {
 
   if (auto get = dynamic_cast<const GetExpr *>(&expr)) {
     Value object = evaluate(*get->object);
+    // Module namespace access (MapPtr)
+    if (auto mapPtr = std::get_if<MapPtr>(&object)) {
+      const auto &values = (*mapPtr)->values;
+      auto it = values.find(get->name.lexeme);
+      if (it != values.end()) {
+        return it->second;
+      }
+      throw std::runtime_error("Module has no exported member '" +
+                               get->name.lexeme + "'.");
+    }
+    // Instance property access
     if (auto inst = std::get_if<InstancePtr>(&object)) {
       LumaInstance *instance = inst->get();
       if (instance->fields.count(get->name.lexeme)) {
@@ -456,7 +533,7 @@ Value Interpreter::evaluate(const Expr &expr) {
       throw std::runtime_error("Undefined property '" + get->name.lexeme +
                                "'.");
     }
-    throw std::runtime_error("Only instances have properties.");
+    throw std::runtime_error("Only instances and modules have properties.");
   }
 
   if (auto set = dynamic_cast<const SetExpr *>(&expr)) {
@@ -488,4 +565,158 @@ Value Interpreter::evaluate(const Expr &expr) {
   }
 
   throw std::runtime_error("Unknown expression type.");
+}
+
+// ========== Module System Implementation ==========
+
+std::string Interpreter::moduleIdToString(const std::vector<Token> &parts) {
+  // Convert [@, std, ., io] -> "@std.io"
+  std::string result;
+  for (const auto &tok : parts) {
+    result += tok.lexeme;
+  }
+  return result;
+}
+
+std::string Interpreter::resolveModulePath(const std::string &moduleId) {
+  // moduleId is like "@std.io" or "@app.util.math"
+  // Parse out the mount and the rest
+  if (moduleId.empty() || moduleId[0] != '@') {
+    throw std::runtime_error("Invalid module ID: " + moduleId);
+  }
+
+  // Find first dot
+  size_t firstDot = moduleId.find('.', 1);
+  std::string mount, rest;
+
+  if (firstDot == std::string::npos) {
+    // No dots, just @mount
+    mount = moduleId.substr(1); // remove @
+    rest = "";
+  } else {
+    mount = moduleId.substr(1, firstDot - 1);
+    rest = moduleId.substr(firstDot + 1);
+  }
+
+  // Determine base path
+  fs::path basePath;
+  if (mount == "std") {
+    basePath = fs::path(stdlibRoot_);
+  } else if (mount == "app") {
+    basePath = fs::path(projectRoot_) / "src";
+  } else {
+    throw std::runtime_error("Unknown module mount '@" + mount +
+                             "'. Use '@std' or '@app'.");
+  }
+
+  // Convert dotted rest to path: util.math -> util/math.lu
+  fs::path modulePath = basePath;
+  if (!rest.empty()) {
+    std::string pathPart = rest;
+    for (char &c : pathPart) {
+      if (c == '.')
+        c = fs::path::preferred_separator;
+    }
+    modulePath = basePath / (pathPart + ".lu");
+  } else {
+    // Just the mount with no subpath - not valid
+    throw std::runtime_error("Module ID '" + moduleId +
+                             "' must have at least one component after mount.");
+  }
+
+  if (!fs::exists(modulePath)) {
+    throw std::runtime_error("Module file not found: " + modulePath.string() +
+                             " (for module " + moduleId + ")");
+  }
+
+  return modulePath.string();
+}
+
+MapPtr Interpreter::loadModule(const std::string &moduleId) {
+  // Check cache first
+  auto cacheIt = moduleCache_.find(moduleId);
+  if (cacheIt != moduleCache_.end()) {
+    return cacheIt->second;
+  }
+
+  // Check for cyclic imports
+  if (modulesLoading_.count(moduleId)) {
+    throw std::runtime_error("Cyclic import detected: " + moduleId);
+  }
+  modulesLoading_.insert(moduleId);
+
+  // Resolve path
+  std::string modulePath = resolveModulePath(moduleId);
+
+  // Read file
+  std::ifstream in(modulePath, std::ios::in | std::ios::binary);
+  if (!in) {
+    modulesLoading_.erase(moduleId);
+    throw std::runtime_error("Could not open module file: " + modulePath);
+  }
+  std::ostringstream ss;
+  ss << in.rdbuf();
+  std::string source = ss.str();
+
+  // Lex and parse
+  Lexer lexer(source);
+  auto tokens = lexer.scanTokens();
+  Parser parser(tokens);
+  auto program = parser.parse();
+
+  // Save current state
+  auto savedEnv = env_;
+  auto savedExports = currentExports_;
+  auto savedModuleId = currentModuleId_;
+  bool savedInModuleLoad = inModuleLoad_;
+
+  // Set up module execution context
+  env_ = std::make_shared<Environment>(globals_);
+  currentExports_ = std::make_shared<LumaMap>();
+  currentModuleId_ = "";
+  inModuleLoad_ = true;
+
+  try {
+    // Execute the module
+    for (const auto &stmt : program) {
+      execute(*stmt);
+
+      // After executing a top-level def or class with Open visibility,
+      // add it to exports
+      if (auto *f = dynamic_cast<const FuncDefStmt *>(stmt.get())) {
+        if (f->visibility == Visibility::Open) {
+          Value val = env_->get(f->name);
+          currentExports_->values[f->name.lexeme] = val;
+        }
+      }
+      if (auto *c = dynamic_cast<const ClassStmt *>(stmt.get())) {
+        if (c->visibility == Visibility::Open) {
+          Value val = env_->get(c->name);
+          currentExports_->values[c->name.lexeme] = val;
+        }
+      }
+    }
+  } catch (...) {
+    // Restore state
+    env_ = savedEnv;
+    currentExports_ = savedExports;
+    currentModuleId_ = savedModuleId;
+    inModuleLoad_ = savedInModuleLoad;
+    modulesLoading_.erase(moduleId);
+    throw;
+  }
+
+  // Get exports and cache
+  MapPtr exports = currentExports_;
+  moduleCache_[moduleId] = exports;
+  moduleAstCache_[moduleId] = std::move(program); // Keep AST alive!
+
+  // Restore state
+  env_ = savedEnv;
+  currentExports_ = savedExports;
+  currentModuleId_ = savedModuleId;
+  inModuleLoad_ = savedInModuleLoad;
+  modulesLoading_.erase(moduleId);
+
+  return exports;
 }

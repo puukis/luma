@@ -1,0 +1,6 @@
+module @app.simple
+
+use @std.io as io
+
+print("Before io call")
+io.println("Hello from io!")

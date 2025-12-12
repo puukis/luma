@@ -13,6 +13,7 @@ enum class TokenType {
   Colon,        // :
   LeftBracket,  // [
   RightBracket, // ]
+  At,           // @
 
   Plus,
   Minus,
@@ -52,6 +53,13 @@ enum class TokenType {
   Otherwise, // Luma unique: otherwise block
   Until,     // until (cond)
 
+  // Module system
+  Module,    // module declaration
+  Use,       // use import
+  As,        // as alias
+  Open,      // open visibility (public)
+  Closed,    // closed visibility (private)
+
   Eof
 };
 
@@ -77,6 +85,8 @@ inline const char *tokenTypeName(TokenType t) {
     return "LeftBracket";
   case TokenType::RightBracket:
     return "RightBracket";
+  case TokenType::At:
+    return "At";
   case TokenType::Plus:
     return "Plus";
   case TokenType::Minus:
@@ -139,6 +149,16 @@ inline const char *tokenTypeName(TokenType t) {
     return "Otherwise";
   case TokenType::Until:
     return "Until";
+  case TokenType::Module:
+    return "Module";
+  case TokenType::Use:
+    return "Use";
+  case TokenType::As:
+    return "As";
+  case TokenType::Open:
+    return "Open";
+  case TokenType::Closed:
+    return "Closed";
   case TokenType::Eof:
     return "Eof";
   }

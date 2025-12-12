@@ -90,7 +90,10 @@ std::string AstPrinter::stmtToString(const Stmt &s) {
   }
 
   if (auto *f = dynamic_cast<const FuncDefStmt *>(&s)) {
-    out << ind() << "def " << f->name.lexeme << "(";
+    out << ind();
+    if (f->visibility == Visibility::Open)
+      out << "open ";
+    out << "def " << f->name.lexeme << "(";
     for (size_t k = 0; k < f->params.size(); k++) {
       if (k)
         out << ", ";
@@ -121,6 +124,26 @@ std::string AstPrinter::stmtToString(const Stmt &s) {
       out << ind() << "otherwise ";
       out << stmtToString(*m->otherwiseBlock);
     }
+    return out.str();
+  }
+
+  // ========== Module System Statements ==========
+
+  if (auto *mod = dynamic_cast<const ModuleStmt *>(&s)) {
+    out << ind() << "module ";
+    for (const auto &t : mod->moduleIdParts) {
+      out << t.lexeme;
+    }
+    out << "\n";
+    return out.str();
+  }
+
+  if (auto *use = dynamic_cast<const UseStmt *>(&s)) {
+    out << ind() << "use ";
+    for (const auto &t : use->moduleIdParts) {
+      out << t.lexeme;
+    }
+    out << " as " << use->alias.lexeme << "\n";
     return out.str();
   }
 

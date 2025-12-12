@@ -1,0 +1,18 @@
+module @std.io
+
+// Standard I/O module for Luma
+// This is part of the standard library
+
+open def println(x) {
+  print(x)
+}
+
+open def log(msg) {
+  print("[LOG] ")
+  print(msg)
+}
+
+closed def internal_helper() {
+  // This is not exported
+  print("internal")
+}

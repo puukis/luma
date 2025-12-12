@@ -16,10 +16,30 @@ std::vector<StmtPtr> Parser::parse() {
 }
 
 StmtPtr Parser::declaration() {
+  // Module system: module declaration must come first
+  if (match({TokenType::Module}))
+    return moduleDeclaration();
+  if (match({TokenType::Use}))
+    return useStatement();
+
+  // Visibility modifiers
+  Visibility vis = Visibility::Closed;
+  if (match({TokenType::Open})) {
+    vis = Visibility::Open;
+  } else if (match({TokenType::Closed})) {
+    vis = Visibility::Closed;
+  }
+
   if (match({TokenType::Def}))
-    return functionDeclaration();
+    return functionDeclaration(vis);
   if (match({TokenType::Class}))
-    return classDeclaration();
+    return classDeclaration(vis);
+
+  // If we had a visibility modifier but no def/class, error
+  if (vis == Visibility::Open) {
+    throw error(previous(), "'open' must be followed by 'def' or 'class'.");
+  }
+
   return statement();
 }
 
@@ -39,6 +59,48 @@ StmtPtr Parser::statement() {
   if (match({TokenType::Maybe}))
     return maybeStatement();
   return assignmentOrExprStatement();
+}
+
+// ========== Module System Parsing ==========
+
+std::vector<Token> Parser::parseModuleId() {
+  // Parse: @ident(.ident)*
+  std::vector<Token> parts;
+
+  // Expect @ token (already consumed by caller usually, but we store it)
+  Token atToken = previous(); // The '@' was matched by caller
+  parts.push_back(atToken);
+
+  // First identifier segment
+  Token ident = consume(TokenType::Identifier, "Expected module name after '@'.");
+  parts.push_back(ident);
+
+  // Optional: .ident segments
+  while (match({TokenType::Dot})) {
+    parts.push_back(previous()); // the '.'
+    Token seg = consume(TokenType::Identifier, "Expected identifier after '.' in module ID.");
+    parts.push_back(seg);
+  }
+
+  return parts;
+}
+
+StmtPtr Parser::moduleDeclaration() {
+  // 'module' was already consumed
+  consume(TokenType::At, "Expected '@' after 'module'.");
+  auto parts = parseModuleId();
+  match({TokenType::Semicolon}); // optional semicolon
+  return std::make_unique<ModuleStmt>(std::move(parts));
+}
+
+StmtPtr Parser::useStatement() {
+  // 'use' was already consumed
+  consume(TokenType::At, "Expected '@' after 'use'.");
+  auto parts = parseModuleId();
+  consume(TokenType::As, "Expected 'as' after module ID in use statement.");
+  Token alias = consume(TokenType::Identifier, "Expected alias name after 'as'.");
+  match({TokenType::Semicolon}); // optional semicolon
+  return std::make_unique<UseStmt>(std::move(parts), std::move(alias));
 }
 
 // ... (skipping some methods) ...
@@ -163,7 +225,7 @@ ExprPtr Parser::primary() {
   throw error(peek(), "Expected expression.");
 }
 
-StmtPtr Parser::functionDeclaration() {
+StmtPtr Parser::functionDeclaration(Visibility vis) {
   Token name =
       consume(TokenType::Identifier, "Expected function name after 'def'.");
   consume(TokenType::LeftParen, "Expected '(' after function name.");
@@ -179,31 +241,17 @@ StmtPtr Parser::functionDeclaration() {
   consume(TokenType::RightParen, "Expected ')' after parameters.");
   auto body = block();
   return std::make_unique<FuncDefStmt>(name, std::move(params),
-                                       std::move(body));
+                                       std::move(body), vis);
 }
 
-StmtPtr Parser::classDeclaration() {
+StmtPtr Parser::classDeclaration(Visibility vis) {
   Token name = consume(TokenType::Identifier, "Expected class name.");
   consume(TokenType::LeftBrace, "Expected '{' before class body.");
 
   std::vector<std::shared_ptr<FuncDefStmt>> methods;
   while (!check(TokenType::RightBrace) && !isAtEnd()) {
     consume(TokenType::Def, "Expected 'def' to define method.");
-    // Reuse functionDeclaration logic but cast to shared_ptr or copy logic?
-    // functionDeclaration returns unique_ptr<Stmt>, explicitly FuncDefStmt
-    // inside. I can't easily reuse it if it returns StmtPtr (unique_ptr<Stmt>).
-    // Let's copy logic or Refactor?
-    // Refactoring is safer. But wait, `functionDeclaration` returns `StmtPtr`
-    // which is `unique_ptr<Stmt>`. I can cast it.
     auto stmt = functionDeclaration();
-    // And I need shared_ptr<FuncDefStmt>.
-    // unique_ptr can be moved to shared_ptr.
-    // And dynamic_cast?
-    // Let's just inline the logic for now or simple reuse.
-    // If I cast unique_ptr<Stmt> to unique_ptr<FuncDefStmt>...
-    // Stmt has virtual destructor, so RTTI works.
-
-    // cast:
     auto funcStmt = std::unique_ptr<FuncDefStmt>(
         static_cast<FuncDefStmt *>(stmt.release()));
     methods.push_back(std::move(funcStmt));
@@ -211,7 +259,7 @@ StmtPtr Parser::classDeclaration() {
 
   consume(TokenType::RightBrace, "Expected '}' after class body.");
 
-  return std::make_unique<ClassStmt>(name, methods);
+  return std::make_unique<ClassStmt>(name, methods, vis);
 }
 
 StmtPtr Parser::printStatement() {
@@ -442,11 +490,16 @@ void Parser::synchronize() {
 
     switch (peek().type) {
     case TokenType::Def:
+    case TokenType::Class:
     case TokenType::If:
     case TokenType::While:
     case TokenType::Return:
     case TokenType::Print:
     case TokenType::Else:
+    case TokenType::Module:
+    case TokenType::Use:
+    case TokenType::Open:
+    case TokenType::Closed:
       return;
     default:
       break;

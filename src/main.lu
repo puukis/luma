@@ -1,0 +1,10 @@
+module @app.main
+
+use @std.io as io
+
+// Test the module system
+io.println("Hello from Luma modules!")
+io.log("Module system is working!")
+
+// Try to access a closed symbol - this should error
+// io.internal_helper()  // Uncomment to test closed access error

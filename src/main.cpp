@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
 
     if (mode == "run") {
       Interpreter interp;
+      interp.setEntryFile(file);
       interp.run(program);
       return 0;
     }

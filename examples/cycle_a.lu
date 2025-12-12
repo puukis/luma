@@ -1,0 +1,5 @@
+module @app.cycle_a
+
+use @app.cycle_b as b
+
+print("In cycle_a")

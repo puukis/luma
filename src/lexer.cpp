@@ -9,9 +9,12 @@ static const std::unordered_map<std::string, TokenType> kKeywords = {
     {"false", TokenType::False}, {"nil", TokenType::Nil},
     {"print", TokenType::Print}, {"echo", TokenType::Echo},
     {"maybe", TokenType::Maybe}, {"otherwise", TokenType::Otherwise},
-    {"maybe", TokenType::Maybe}, {"otherwise", TokenType::Otherwise},
     {"until", TokenType::Until}, {"class", TokenType::Class},
     {"this", TokenType::This},
+    // Module system keywords
+    {"module", TokenType::Module}, {"use", TokenType::Use},
+    {"as", TokenType::As},         {"open", TokenType::Open},
+    {"closed", TokenType::Closed},
 };
 
 Lexer::Lexer(std::string source) : source_(std::move(source)) {}
@@ -92,6 +95,9 @@ void Lexer::scanToken() {
     break;
   case ']':
     addToken(TokenType::RightBracket);
+    break;
+  case '@':
+    addToken(TokenType::At);
     break;
   case '+':
     addToken(TokenType::Plus);
