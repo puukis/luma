@@ -45,7 +45,40 @@ if ! command -v make &> /dev/null; then
     fail "make is not installed. Please install it first."
 fi
 
-# 2. Build the project
+if ! command -v git &> /dev/null; then
+    fail "git is not installed. Please install it first."
+fi
+
+# 2. Setup Source Directory (Handle Remote Install)
+cleanup() {
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+        log_info "Cleaning up temporary files..."
+        rm -rf "$TEMP_DIR"
+    fi
+}
+
+if [ ! -f "$SOURCE_DIR/CMakeLists.txt" ]; then
+    log_warn "CMakeLists.txt not found in $SOURCE_DIR."
+    log_info "Assuming remote installation. Cloning repository..."
+    
+    TEMP_DIR=$(mktemp -d)
+    trap cleanup EXIT
+    
+    log_info "Created temporary directory: $TEMP_DIR"
+    
+    if ! git clone https://github.com/puukis/luma.git "$TEMP_DIR/luma"; then
+        fail "Failed to clone repository."
+    fi
+    
+    SOURCE_DIR="$TEMP_DIR/luma"
+    BUILD_DIR="$SOURCE_DIR/build"
+    
+    log_success "Repository cloned successfully."
+else
+    log_info "Found CMakeLists.txt. Running local installation..."
+fi
+
+# 3. Build the project
 log_info "Building Luma..."
 
 if [ -d "$BUILD_DIR" ]; then
