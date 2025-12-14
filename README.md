@@ -85,6 +85,22 @@ Scan and print tokens:
 ./build/lumac tokens examples/test.lu
 ```
 
+## 📚 Standard Library Modules
+
+Luma ships with a small standard library accessible through the `use` statement:
+
+- `@std.io` – input/output helpers like `println`, `input`, and `ask`.
+- `@std.json` – JSON parsing and stringifying.
+- `@std.math` – numeric helpers such as `sqrt`, `sin`, `cos`, `tan`, `abs`, `ceil`, `floor`, and `pi`.
+- `@std.os` – operating system helpers (`name`, `cwd`, `env`, `exit`).
+- `@std.time` – time utilities like `now` and `sleep`.
+- `@std.string` – string helpers (`upper`, `lower`, `trim`, `starts_with`, `ends_with`, `split`, `join`).
+- `@std.random` – random numbers via `number`, `between`, and `int`.
+- `@std.fs` – filesystem helpers (`exists`, `is_dir`, `read_file`, `write_file`, `list_dir`).
+- `@std.http` – minimal HTTP helpers (`get`, `post`).
+- `@std.crypto` – hashing and randomness (`hash`, `random_bytes`).
+- `@std.regex` – regular expressions (`match`, `search`, `replace`, `split`).
+
 ## ✨ Language Guide
 
 ### 1. Variables & Types

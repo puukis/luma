@@ -1,0 +1,22 @@
+module @std.random
+
+// Random utilities module
+// Backend: Native C++ implementation
+
+// Returns a floating-point number in [0, 1).
+// native def number()
+open def number() {
+  return 0
+}
+
+// Returns a floating-point number between min and max (inclusive of min, exclusive of max).
+// native def between(min, max)
+open def between(min, max) {
+  return 0
+}
+
+// Returns an integer between min and max (inclusive).
+// native def int(min, max)
+open def int(min, max) {
+  return 0
+}

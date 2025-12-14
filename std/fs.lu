@@ -1,0 +1,33 @@
+module @std.fs
+
+// Filesystem utilities (native backend)
+
+// Checks whether the given path exists.
+// native def exists(path)
+open def exists(path) {
+  return false
+}
+
+// Checks whether the given path is a directory.
+// native def is_dir(path)
+open def is_dir(path) {
+  return false
+}
+
+// Reads an entire file as a string. Returns nil on failure.
+// native def read_file(path)
+open def read_file(path) {
+  return nil
+}
+
+// Writes a string to a file. Returns true on success.
+// native def write_file(path, data)
+open def write_file(path, data) {
+  return false
+}
+
+// Lists entries in a directory (filenames only). Returns nil on error.
+// native def list_dir(path)
+open def list_dir(path) {
+  return []
+}

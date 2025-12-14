@@ -1,0 +1,27 @@
+module @std.regex
+
+// Regular expression helpers implemented natively.
+
+// Returns true if the entire string matches the pattern.
+// native def match(pattern, text)
+open def match(pattern, text) {
+  return false
+}
+
+// Returns true if any part of the string matches the pattern.
+// native def search(pattern, text)
+open def search(pattern, text) {
+  return false
+}
+
+// Replaces all occurrences of the pattern in the string.
+// native def replace(pattern, text, replacement)
+open def replace(pattern, text, replacement) {
+  return text
+}
+
+// Splits a string using the pattern as a delimiter.
+// native def split(pattern, text)
+open def split(pattern, text) {
+  return []
+}
