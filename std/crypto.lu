@@ -1,0 +1,15 @@
+module @std.crypto
+
+// Basic cryptographic helpers provided by the native runtime.
+
+// Produces a deterministic 256-bit hex digest of the input string.
+// native def hash(data)
+open def hash(data) {
+  return ""
+}
+
+// Generates random bytes and returns them as a hex string.
+// native def random_bytes(length)
+open def random_bytes(length) {
+  return ""
+}

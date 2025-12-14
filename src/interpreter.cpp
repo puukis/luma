@@ -1,10 +1,17 @@
 #include "interpreter.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <random>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 
@@ -1149,6 +1156,305 @@ static Value nativeMathPi(const std::vector<Value> &args) {
     return 3.141592653589793;
 }
 
+static std::string trimString(const std::string &input) {
+  size_t start = 0;
+  while (start < input.size() && std::isspace(static_cast<unsigned char>(input[start]))) {
+    start++;
+  }
+  if (start == input.size()) return "";
+
+  size_t end = input.size();
+  while (end > start && std::isspace(static_cast<unsigned char>(input[end - 1]))) {
+    end--;
+  }
+
+  return input.substr(start, end - start);
+}
+
+static double requireNumberValue(const Value &v, const std::string &where) {
+  if (auto n = std::get_if<double>(&v)) return *n;
+  throw std::runtime_error("Expected number in " + where + ".");
+}
+
+static std::string requireStringValue(const Value &v, const std::string &where) {
+  if (auto s = std::get_if<std::string>(&v)) return *s;
+  throw std::runtime_error("Expected string in " + where + ".");
+}
+
+static std::mt19937 &globalRng();
+
+static Value nativeFsExists(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "fs.exists path");
+  return fs::exists(path);
+}
+
+static Value nativeFsIsDir(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "fs.is_dir path");
+  return fs::is_directory(path);
+}
+
+static Value nativeFsReadFile(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "fs.read_file path");
+  std::ifstream file(path, std::ios::binary);
+  if (!file.is_open()) return std::monostate{};
+
+  std::ostringstream contents;
+  contents << file.rdbuf();
+  return contents.str();
+}
+
+static Value nativeFsWriteFile(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "fs.write_file path");
+  std::string data = requireStringValue(args[1], "fs.write_file data");
+  std::ofstream file(path, std::ios::binary);
+  if (!file.is_open()) return false;
+  file << data;
+  return file.good();
+}
+
+static Value nativeFsListDir(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "fs.list_dir path");
+  auto list = std::make_shared<List>();
+  try {
+    for (const auto &entry : fs::directory_iterator(path)) {
+      list->elements.push_back(entry.path().filename().string());
+    }
+  } catch (const std::exception &) {
+    return std::monostate{};
+  }
+  return list;
+}
+
+static std::string shellQuote(const std::string &arg) {
+  std::string quoted = "'";
+  for (char c : arg) {
+    if (c == '\'') {
+      quoted += "'\\''";
+    } else {
+      quoted += c;
+    }
+  }
+  quoted += "'";
+  return quoted;
+}
+
+static Value runShellCapture(const std::string &command) {
+  FILE *pipe = popen(command.c_str(), "r");
+  if (!pipe) return std::monostate{};
+
+  std::string output;
+  char buffer[256];
+  while (fgets(buffer, sizeof(buffer), pipe)) {
+    output += buffer;
+  }
+  int rc = pclose(pipe);
+  if (rc != 0) return std::monostate{};
+  return output;
+}
+
+static Value nativeHttpGet(const std::vector<Value> &args) {
+  std::string url = requireStringValue(args[0], "http.get url");
+  std::string command = "curl -fsSL --max-time 10 " + shellQuote(url) + " 2>/dev/null";
+  return runShellCapture(command);
+}
+
+static Value nativeHttpPost(const std::vector<Value> &args) {
+  std::string url = requireStringValue(args[0], "http.post url");
+  std::string body = requireStringValue(args[1], "http.post body");
+  std::string command = "curl -fsSL --max-time 10 -X POST --data-binary " + shellQuote(body) + " " + shellQuote(url) + " 2>/dev/null";
+  return runShellCapture(command);
+}
+
+static std::string hexFromUint64(uint64_t value) {
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0') << std::setw(16) << value;
+  return oss.str();
+}
+
+static std::string pseudoSha256(const std::string &data) {
+  static const std::array<uint64_t, 4> salts = {
+      0x9e3779b97f4a7c15ULL, 0xc2b2ae3d27d4eb4fULL,
+      0x165667b19e3779f9ULL, 0xd6e8feb86659fd93ULL};
+
+  std::hash<std::string> hasher;
+  std::string digest;
+  digest.reserve(64);
+
+  for (auto salt : salts) {
+    digest += hexFromUint64(hasher(data + std::to_string(salt)) ^ salt);
+  }
+  return digest;
+}
+
+static Value nativeCryptoHash(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "crypto.hash data");
+  return pseudoSha256(data);
+}
+
+static Value nativeCryptoRandomBytes(const std::vector<Value> &args) {
+  double requested = requireNumberValue(args[0], "crypto.random_bytes length");
+  if (requested < 0) {
+    throw std::runtime_error("crypto.random_bytes length cannot be negative.");
+  }
+
+  size_t length = static_cast<size_t>(requested);
+  std::uniform_int_distribution<int> dist(0, 255);
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0');
+  for (size_t i = 0; i < length; ++i) {
+    int byte = dist(globalRng());
+    oss << std::setw(2) << byte;
+  }
+  return oss.str();
+}
+
+static Value nativeRegexMatch(const std::vector<Value> &args) {
+  std::string pattern = requireStringValue(args[0], "regex.match pattern");
+  std::string text = requireStringValue(args[1], "regex.match text");
+  try {
+    std::regex re(pattern);
+    return std::regex_match(text, re);
+  } catch (const std::regex_error &e) {
+    throw std::runtime_error(std::string("Invalid regex: ") + e.what());
+  }
+}
+
+static Value nativeRegexSearch(const std::vector<Value> &args) {
+  std::string pattern = requireStringValue(args[0], "regex.search pattern");
+  std::string text = requireStringValue(args[1], "regex.search text");
+  try {
+    std::regex re(pattern);
+    return std::regex_search(text, re);
+  } catch (const std::regex_error &e) {
+    throw std::runtime_error(std::string("Invalid regex: ") + e.what());
+  }
+}
+
+static Value nativeRegexReplace(const std::vector<Value> &args) {
+  std::string pattern = requireStringValue(args[0], "regex.replace pattern");
+  std::string text = requireStringValue(args[1], "regex.replace text");
+  std::string replacement = requireStringValue(args[2], "regex.replace replacement");
+  try {
+    std::regex re(pattern);
+    return std::regex_replace(text, re, replacement);
+  } catch (const std::regex_error &e) {
+    throw std::runtime_error(std::string("Invalid regex: ") + e.what());
+  }
+}
+
+static Value nativeRegexSplit(const std::vector<Value> &args) {
+  std::string pattern = requireStringValue(args[0], "regex.split pattern");
+  std::string text = requireStringValue(args[1], "regex.split text");
+  auto list = std::make_shared<List>();
+  try {
+    std::regex re(pattern);
+    std::sregex_token_iterator it(text.begin(), text.end(), re, -1);
+    std::sregex_token_iterator end;
+    for (; it != end; ++it) {
+      list->elements.push_back(it->str());
+    }
+  } catch (const std::regex_error &e) {
+    throw std::runtime_error(std::string("Invalid regex: ") + e.what());
+  }
+  return list;
+}
+
+static Value nativeStringUpper(const std::vector<Value> &args) {
+  std::string value = requireStringValue(args[0], "string.upper");
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return std::toupper(c); });
+  return value;
+}
+
+static Value nativeStringLower(const std::vector<Value> &args) {
+  std::string value = requireStringValue(args[0], "string.lower");
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return std::tolower(c); });
+  return value;
+}
+
+static Value nativeStringTrim(const std::vector<Value> &args) {
+  std::string value = requireStringValue(args[0], "string.trim");
+  return trimString(value);
+}
+
+static Value nativeStringStartsWith(const std::vector<Value> &args) {
+  std::string value = requireStringValue(args[0], "string.starts_with value");
+  std::string prefix = requireStringValue(args[1], "string.starts_with prefix");
+  if (prefix.size() > value.size()) return false;
+  return value.compare(0, prefix.size(), prefix) == 0;
+}
+
+static Value nativeStringEndsWith(const std::vector<Value> &args) {
+  std::string value = requireStringValue(args[0], "string.ends_with value");
+  std::string suffix = requireStringValue(args[1], "string.ends_with suffix");
+  if (suffix.size() > value.size()) return false;
+  return value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+static Value nativeStringSplit(const std::vector<Value> &args) {
+  std::string value = requireStringValue(args[0], "string.split value");
+  std::string delim = requireStringValue(args[1], "string.split delimiter");
+  if (delim.empty()) {
+    throw std::runtime_error("Delimiter cannot be empty in string.split.");
+  }
+
+  auto list = std::make_shared<List>();
+  size_t start = 0;
+  while (true) {
+    size_t pos = value.find(delim, start);
+    if (pos == std::string::npos) {
+      list->elements.push_back(value.substr(start));
+      break;
+    }
+    list->elements.push_back(value.substr(start, pos - start));
+    start = pos + delim.size();
+  }
+  return list;
+}
+
+static Value nativeStringJoin(const std::vector<Value> &args) {
+  const Value &listVal = args[0];
+  std::string delim = requireStringValue(args[1], "string.join delimiter");
+
+  auto listPtr = std::get_if<ListPtr>(&listVal);
+  if (!listPtr) {
+    throw std::runtime_error("Expected list in string.join.");
+  }
+
+  std::ostringstream out;
+  const auto &elements = (*listPtr)->elements;
+  for (size_t i = 0; i < elements.size(); ++i) {
+    if (i > 0) out << delim;
+    out << requireStringValue(elements[i], "string.join elements");
+  }
+  return out.str();
+}
+
+static std::mt19937 &globalRng() {
+  static std::mt19937 engine(std::random_device{}());
+  return engine;
+}
+
+static Value nativeRandomNumber(const std::vector<Value> &args) {
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  return dist(globalRng());
+}
+
+static Value nativeRandomBetween(const std::vector<Value> &args) {
+  double min = requireNumberValue(args[0], "random.between min");
+  double max = requireNumberValue(args[1], "random.between max");
+  if (max < min) std::swap(min, max);
+  std::uniform_real_distribution<double> dist(min, max);
+  return dist(globalRng());
+}
+
+static Value nativeRandomInt(const std::vector<Value> &args) {
+  double min = requireNumberValue(args[0], "random.int min");
+  double max = requireNumberValue(args[1], "random.int max");
+  if (max < min) std::swap(min, max);
+  std::uniform_int_distribution<int> dist(static_cast<int>(std::floor(min)), static_cast<int>(std::floor(max)));
+  return static_cast<double>(dist(globalRng()));
+}
+
 
 void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr exports) {
   auto defineNative = [&](const std::string &name, std::function<Value(const std::vector<Value>&)> func, size_t arity) {
@@ -1183,6 +1489,35 @@ void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr export
       defineNative("ceil", nativeMathCeil, 1);
       defineNative("floor", nativeMathFloor, 1);
       defineNative("pi", nativeMathPi, 0);
+  } else if (moduleId == "@std.string") {
+      defineNative("upper", nativeStringUpper, 1);
+      defineNative("lower", nativeStringLower, 1);
+      defineNative("trim", nativeStringTrim, 1);
+      defineNative("starts_with", nativeStringStartsWith, 2);
+      defineNative("ends_with", nativeStringEndsWith, 2);
+      defineNative("split", nativeStringSplit, 2);
+      defineNative("join", nativeStringJoin, 2);
+  } else if (moduleId == "@std.random") {
+      defineNative("number", nativeRandomNumber, 0);
+      defineNative("between", nativeRandomBetween, 2);
+      defineNative("int", nativeRandomInt, 2);
+  } else if (moduleId == "@std.fs") {
+      defineNative("exists", nativeFsExists, 1);
+      defineNative("is_dir", nativeFsIsDir, 1);
+      defineNative("read_file", nativeFsReadFile, 1);
+      defineNative("write_file", nativeFsWriteFile, 2);
+      defineNative("list_dir", nativeFsListDir, 1);
+  } else if (moduleId == "@std.http") {
+      defineNative("get", nativeHttpGet, 1);
+      defineNative("post", nativeHttpPost, 2);
+  } else if (moduleId == "@std.crypto") {
+      defineNative("hash", nativeCryptoHash, 1);
+      defineNative("random_bytes", nativeCryptoRandomBytes, 1);
+  } else if (moduleId == "@std.regex") {
+      defineNative("match", nativeRegexMatch, 2);
+      defineNative("search", nativeRegexSearch, 2);
+      defineNative("replace", nativeRegexReplace, 3);
+      defineNative("split", nativeRegexSplit, 2);
   }
 }
 

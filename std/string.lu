@@ -1,0 +1,46 @@
+module @std.string
+
+// String utilities module
+// Backend: Native C++ implementation
+
+// Converts a string to uppercase.
+// native def upper(str)
+open def upper(str) {
+  return str
+}
+
+// Converts a string to lowercase.
+// native def lower(str)
+open def lower(str) {
+  return str
+}
+
+// Trims whitespace from both ends of a string.
+// native def trim(str)
+open def trim(str) {
+  return str
+}
+
+// Checks if a string starts with the given prefix.
+// native def starts_with(str, prefix)
+open def starts_with(str, prefix) {
+  return false
+}
+
+// Checks if a string ends with the given suffix.
+// native def ends_with(str, suffix)
+open def ends_with(str, suffix) {
+  return false
+}
+
+// Splits a string by a delimiter into a list of substrings.
+// native def split(str, delimiter)
+open def split(str, delimiter) {
+  return []
+}
+
+// Joins a list of strings using a delimiter.
+// native def join(list, delimiter)
+open def join(list, delimiter) {
+  return ""
+}

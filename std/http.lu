@@ -1,0 +1,15 @@
+module @std.http
+
+// Simple HTTP helpers backed by native code.
+
+// Performs an HTTP GET and returns the response body as a string.
+// native def get(url)
+open def get(url) {
+  return ""
+}
+
+// Performs an HTTP POST with a string body and returns the response body as a string.
+// native def post(url, body)
+open def post(url, body) {
+  return ""
+}
