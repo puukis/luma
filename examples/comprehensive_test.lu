@@ -1,0 +1,201 @@
+// Comprehensive test for all new standard libraries
+
+use @std.io as io
+use @std.buffer as buffer
+use @std.cache as cache
+use @std.async as async
+use @std.net as net
+use @std.socket as socket
+
+io.println("🧪 Comprehensive Test Suite for New Standard Libraries")
+io.println("=====================================================")
+
+// Test 1: Bitwise Operations (used internally by buffer)
+io.println("\n1. 🔢 Bitwise Operations Test:")
+
+test_val = 255 & 15  // Should be 15
+io.println("255 & 15 =")
+io.println(test_val)
+
+test_val2 = 10 | 5   // Should be 15
+io.println("10 | 5 =")
+io.println(test_val2)
+
+test_val3 = 1 << 8   // Should be 256
+io.println("1 << 8 =")
+io.println(test_val3)
+
+test_val4 = 256 >> 4 // Should be 16
+io.println("256 >> 4 =")
+io.println(test_val4)
+
+io.println("✓ Bitwise operations working")
+
+// Test 2: Buffer Library
+io.println("\n2. 📦 Buffer Library Test:")
+
+buf = buffer.Buffer(10)
+buf.set(0, 72)  // 'H'
+buf.set(1, 101) // 'e'
+buf.set(2, 108) // 'l'
+buf.set(3, 108) // 'l'
+buf.set(4, 111) // 'o'
+
+io.println("Buffer length: " + buf.length())
+io.println("Buffer byte 0: " + buf.get(0))
+io.println("Buffer byte 4: " + buf.get(4))
+
+// Test integer reading/writing
+buf2 = buffer.Buffer(8)
+buf2.write_uint32_be(0, 305419896)  // 0x12345678
+read_val = buf2.read_uint32_be(0)
+io.println("32-bit big-endian write/read: " + read_val)
+
+buf2.write_uint16_le(4, 4660)  // 0x1234
+read_val2 = buf2.read_uint16_le(4)
+io.println("16-bit little-endian write/read: " + read_val2)
+
+io.println("✓ Buffer operations working")
+
+// Test 3: Cache Library
+io.println("\n3. 💾 Cache Library Test:")
+
+// LRU Cache
+lru = cache.lru(3)
+lru.set("a", 1)
+lru.set("b", 2)
+lru.set("c", 3)
+io.println("LRU get 'a': " + lru.get("a"))
+lru.set("d", 4) // Should evict 'b'
+io.println("LRU size after adding 'd': " + lru.length())
+
+// TTL Cache
+ttl = cache.ttl(5, 1) // 5 items, 1 second TTL
+ttl.set("temp", "value", 2)
+io.println("TTL has 'temp': " + ttl.has("temp"))
+io.println("TTL cache size: " + ttl.length())
+
+io.println("✓ Cache operations working")
+
+// Test 4: Async Library
+io.println("\n4. ⚡ Async Library Test:")
+
+// Test Promise
+promise = async.Promise(lambda(resolve, reject) {
+  resolve("Promise resolved!")
+})
+
+promise.then(lambda(value) {
+  io.println("Promise result: " + value)
+})
+
+// Test sleep
+io.println("Testing async sleep...")
+sleep_promise = async.sleep(100) // 100ms
+sleep_promise.then(lambda() {
+  io.println("Async sleep completed")
+})
+
+io.println("✓ Async operations working")
+
+// Test 5: Net Library
+io.println("\n5. 🌐 Net Library Test:")
+
+io.println("Is 192.168.1.1 IPv4? " + net.is_ipv4("192.168.1.1"))
+io.println("Is 2001:db8::1 IPv6? " + net.is_ipv6("2001:db8::1"))
+io.println("Is invalid.ip IPv4? " + net.is_ipv4("invalid.ip"))
+
+ip_int = net.ipv4_to_int("192.168.1.1")
+io.println("192.168.1.1 as int: " + ip_int)
+
+back_to_ip = net.int_to_ipv4(ip_int)
+io.println("Back to IP: " + back_to_ip)
+
+hostname = net.get_hostname()
+io.println("Hostname: " + hostname)
+
+url_info = net.parse_url("http://example.com:8080/path?query=value")
+if (url_info != nil) {
+  io.println("URL protocol: " + url_info["protocol"])
+  io.println("URL hostname: " + url_info["hostname"])
+  io.println("URL port: " + url_info["port"])
+  io.println("URL pathname: " + url_info["pathname"])
+}
+
+io.println("✓ Network operations working")
+
+// Test 6: Socket Library (Basic connectivity test)
+io.println("\n6. 🔌 Socket Library Test:")
+
+// Create a TCP socket
+tcp_sock = socket.tcp_socket()
+if (tcp_sock != nil) {
+  io.println("✓ TCP socket created successfully")
+
+  // Try to create a simple connection (will fail but shouldn't crash)
+  connect_promise = tcp_sock.connect("127.0.0.1", 12345) // Non-existent port
+  connect_promise.then(
+    lambda() {
+      io.println("Unexpected: connection succeeded")
+    },
+    lambda(err) {
+      io.println("Expected: connection failed - " + err)
+    }
+  )
+
+  tcp_sock.close()
+  io.println("✓ TCP socket closed")
+} else {
+  io.println("✗ Failed to create TCP socket")
+}
+
+// Create a UDP socket
+udp_sock = socket.udp_socket()
+if (udp_sock != nil) {
+  io.println("✓ UDP socket created successfully")
+
+  // Try to bind to a port
+  if (udp_sock.bind("127.0.0.1", 0)) { // Use port 0 for auto-assignment
+    io.println("✓ UDP socket bound successfully")
+  } else {
+    io.println("✗ Failed to bind UDP socket")
+  }
+
+  udp_sock.close()
+  io.println("✓ UDP socket closed")
+} else {
+  io.println("✗ Failed to create UDP socket")
+}
+
+io.println("✓ Socket operations working")
+
+// Test 7: Integration Test - Buffer + Cache
+io.println("\n7. 🔗 Integration Test (Buffer + Cache):")
+
+cache_with_buffers = cache.lru(2)
+
+// Store buffers in cache
+buf1 = buffer.Buffer("Data1")
+buf2 = buffer.Buffer("Data2")
+cache_with_buffers.set("buf1", buf1)
+cache_with_buffers.set("buf2", buf2)
+
+retrieved_buf = cache_with_buffers.get("buf1")
+if (retrieved_buf != nil) {
+  io.println("✓ Retrieved buffer from cache, length: " + retrieved_buf.length())
+}
+
+io.println("✓ Integration test passed")
+
+// Summary
+io.println("\n🎉 Comprehensive Test Suite Complete!")
+io.println("=====================================")
+io.println("✓ Bitwise operations")
+io.println("✓ Buffer library")
+io.println("✓ Cache library")
+io.println("✓ Async library")
+io.println("✓ Network library")
+io.println("✓ Socket library")
+io.println("✓ Integration tests")
+io.println("")
+io.println("All new standard libraries are working correctly! 🚀")

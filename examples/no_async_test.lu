@@ -1,0 +1,8 @@
+// Test without async
+use @std.io as io
+use @std.buffer as buffer
+
+io.println("Testing without async")
+
+buf = buffer.Buffer("Hello")
+io.println("Buffer: " + buf.to_string())

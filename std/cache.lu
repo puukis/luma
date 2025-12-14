@@ -1,0 +1,735 @@
+module @std.cache
+
+use @std.datetime as datetime
+
+// Standard Cache module for Luma
+// Caching utilities with various strategies (LRU, TTL, etc.)
+
+// Base Cache class
+open class Cache {
+  def init(max_size) {
+    this.max_size = max_size
+    if (this.max_size == nil) {
+      this.max_size = 100
+    }
+    this.data = {}
+    this.size = 0
+  }
+
+  def get(key) {
+    return nil  // Override in subclasses
+  }
+
+  def set(key, value) {
+    return false  // Override in subclasses
+  }
+
+  def has(key) {
+    return this.data[key] != nil
+  }
+
+  def delete(key) {
+    if (this.data[key] != nil) {
+      this.data[key] = nil
+      this.size = this.size - 1
+      return true
+    }
+    return false
+  }
+
+  def clear() {
+    this.data = {}
+    this.size = 0
+  }
+
+  def keys() {
+    return keys(this.data)
+  }
+
+  def values() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      if (this.data[k[i]] != nil) {
+        push(result, this.data[k[i]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def entries() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      if (this.data[k[i]] != nil) {
+        push(result, [k[i], this.data[k[i]]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def length() {
+    return this.size
+  }
+
+  def is_empty() {
+    return this.size == 0
+  }
+
+  def is_full() {
+    return this.size >= this.max_size
+  }
+}
+
+// LRU (Least Recently Used) Cache
+open class LRUCache {
+  def init(max_size) {
+    this.max_size = max_size
+    if (this.max_size == nil) {
+      this.max_size = 100
+    }
+    this.data = {}
+    this.order = []  // Maintains access order (most recent at end)
+    this.size = 0
+  }
+
+  def get(key) {
+    if (this.data[key] == nil) {
+      return nil
+    }
+
+    // Move to end (most recently used)
+    this._move_to_end(key)
+    return this.data[key]["value"]
+  }
+
+  def set(key, value) {
+    if (this.data[key] != nil) {
+      // Update existing
+      this.data[key]["value"] = value
+      this._move_to_end(key)
+      return true
+    }
+
+    // Add new entry
+    if (this.size >= this.max_size) {
+      this._evict_lru()
+    }
+
+    entry = { "key": key, "value": value }
+    this.data[key] = entry
+    push(this.order, key)
+    this.size = this.size + 1
+    return true
+  }
+
+  def has(key) {
+    return this.data[key] != nil
+  }
+
+  def delete(key) {
+    if (this.data[key] == nil) {
+      return false
+    }
+
+    this.data[key] = nil
+    this._remove_from_order(key)
+    this.size = this.size - 1
+    return true
+  }
+
+  def clear() {
+    this.data = {}
+    this.order = []
+    this.size = 0
+  }
+
+  def keys() {
+    return this.order.slice(0)  // copy
+  }
+
+  def values() {
+    result = []
+    i = 0
+    until (i >= len(this.order)) {
+      key = this.order[i]
+      if (this.data[key] != nil) {
+        push(result, this.data[key]["value"])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def entries() {
+    result = []
+    i = 0
+    until (i >= len(this.order)) {
+      key = this.order[i]
+      if (this.data[key] != nil) {
+        push(result, [key, this.data[key]["value"]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def length() {
+    return this.size
+  }
+
+  def is_empty() {
+    return this.size == 0
+  }
+
+  def is_full() {
+    return this.size >= this.max_size
+  }
+
+  // Get the least recently used key (for inspection)
+  def lru_key() {
+    if (len(this.order) > 0) {
+      return this.order[0]
+    } else {
+      return nil
+    }
+  }
+
+  // Get the most recently used key (for inspection)
+  def mru_key() {
+    if (len(this.order) > 0) {
+      return this.order[len(this.order) - 1]
+    } else {
+      return nil
+    }
+  }
+
+  def _move_to_end(key) {
+    this._remove_from_order(key)
+    push(this.order, key)
+  }
+
+  def _remove_from_order(key) {
+    new_order = []
+    i = 0
+    until (i >= len(this.order)) {
+      if (this.order[i] != key) {
+        push(new_order, this.order[i])
+      }
+      i = i + 1
+    }
+    this.order = new_order
+  }
+
+  def _evict_lru() {
+    if (len(this.order) == 0) {
+      return
+    }
+    lru_key = this.order[0]
+    this.data[lru_key] = nil
+    this.order = this.order.slice(1)
+    this.size = this.size - 1
+  }
+}
+
+// TTL (Time To Live) Cache
+open class TTLCache {
+  def init(max_size, default_ttl) {
+    this.max_size = max_size
+    if (this.max_size == nil) {
+      this.max_size = 100
+    }
+    this.default_ttl = default_ttl
+    if (this.default_ttl == nil) {
+      this.default_ttl = 3600  // 1 hour in seconds
+    }
+    this.data = {}
+    this.size = 0
+  }
+
+  def get(key) {
+    entry = this.data[key]
+    if (entry == nil) {
+      return nil
+    }
+
+    if (this._is_expired(entry)) {
+      this.delete(key)
+      return nil
+    }
+
+    return entry["value"]
+  }
+
+  def set(key, value, ttl) {
+    if (ttl == nil) {
+      ttl = this.default_ttl
+    }
+
+    now = datetime.now().unix()
+    entry = {
+      "value": value,
+      "expires_at": now + ttl
+    }
+
+    if (this.data[key] == nil) {
+      if (this.size >= this.max_size) {
+        this._evict_expired()
+        if (this.size >= this.max_size) {
+          return false  // Still full after cleanup
+        }
+      }
+      this.size = this.size + 1
+    }
+
+    this.data[key] = entry
+    return true
+  }
+
+  def has(key) {
+    entry = this.data[key]
+    if (entry == nil) {
+      return false
+    }
+    return !this._is_expired(entry)
+  }
+
+  def delete(key) {
+    if (this.data[key] != nil) {
+      this.data[key] = nil
+      this.size = this.size - 1
+      return true
+    }
+    return false
+  }
+
+  def clear() {
+    this.data = {}
+    this.size = 0
+  }
+
+  def keys() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      entry = this.data[k[i]]
+      if (entry != nil and !this._is_expired(entry)) {
+        push(result, k[i])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def values() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      entry = this.data[k[i]]
+      if (entry != nil and !this._is_expired(entry)) {
+        push(result, entry["value"])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def entries() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      entry = this.data[k[i]]
+      if (entry != nil and !this._is_expired(entry)) {
+        push(result, [k[i], entry["value"]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def length() {
+    // Clean expired entries and return current size
+    this._evict_expired()
+    return this.size
+  }
+
+  def is_empty() {
+    this._evict_expired()
+    return this.size == 0
+  }
+
+  def is_full() {
+    return this.size >= this.max_size
+  }
+
+  // Get TTL for a key (seconds remaining)
+  def ttl(key) {
+    entry = this.data[key]
+    if (entry == nil) {
+      return -2  // Key doesn't exist
+    }
+
+    now = datetime.now().unix()
+    remaining = entry["expires_at"] - now
+    if (remaining > 0) {
+      return remaining
+    } else {
+      return -1  // -1 if expired
+    }
+  }
+
+  // Set TTL for existing key
+  def expire(key, ttl) {
+    entry = this.data[key]
+    if (entry == nil) {
+      return false
+    }
+
+    now = datetime.now().unix()
+    entry["expires_at"] = now + ttl
+    return true
+  }
+
+  // Clean up expired entries
+  def cleanup() {
+    this._evict_expired()
+  }
+
+  def _is_expired(entry) {
+    now = datetime.now().unix()
+    return now >= entry["expires_at"]
+  }
+
+  def _evict_expired() {
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      entry = this.data[k[i]]
+      if (entry != nil and this._is_expired(entry)) {
+        this.data[k[i]] = nil
+        this.size = this.size - 1
+      }
+      i = i + 1
+    }
+  }
+}
+
+// LFU (Least Frequently Used) Cache
+open class LFUCache {
+  def init(max_size) {
+    this.max_size = max_size
+    if (this.max_size == nil) {
+      this.max_size = 100
+    }
+    this.data = {}
+    this.frequencies = {}  // key -> frequency
+    this.freq_lists = {}   // frequency -> list of keys
+    this.min_freq = 0
+    this.size = 0
+  }
+
+  def get(key) {
+    entry = this.data[key]
+    if (entry == nil) {
+      return nil
+    }
+
+    // Increase frequency
+    this._increase_frequency(key)
+    return entry["value"]
+  }
+
+  def set(key, value) {
+    if (this.data[key] != nil) {
+      // Update existing
+      this.data[key]["value"] = value
+      this._increase_frequency(key)
+      return true
+    }
+
+    // Add new entry
+    if (this.size >= this.max_size) {
+      this._evict_lfu()
+    }
+
+    entry = { "key": key, "value": value }
+    this.data[key] = entry
+    this.frequencies[key] = 1
+
+    // Add to frequency 1 list
+    if (this.freq_lists[1] == nil) {
+      this.freq_lists[1] = []
+    }
+    push(this.freq_lists[1], key)
+
+    this.min_freq = 1
+    this.size = this.size + 1
+    return true
+  }
+
+  def has(key) {
+    return this.data[key] != nil
+  }
+
+  def delete(key) {
+    if (this.data[key] == nil) {
+      return false
+    }
+
+    freq = this.frequencies[key]
+    this._remove_from_freq_list(key, freq)
+
+    this.data[key] = nil
+    this.frequencies[key] = nil
+    this.size = this.size - 1
+
+    // Update min_freq if necessary
+    if (freq == this.min_freq and len(this.freq_lists[freq]) == 0) {
+      this.min_freq = this.min_freq + 1
+    }
+
+    return true
+  }
+
+  def clear() {
+    this.data = {}
+    this.frequencies = {}
+    this.freq_lists = {}
+    this.min_freq = 0
+    this.size = 0
+  }
+
+  def keys() {
+    return keys(this.data)
+  }
+
+  def values() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      if (this.data[k[i]] != nil) {
+        push(result, this.data[k[i]]["value"])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def entries() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      if (this.data[k[i]] != nil) {
+        push(result, [k[i], this.data[k[i]]["value"]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def length() {
+    return this.size
+  }
+
+  def is_empty() {
+    return this.size == 0
+  }
+
+  def is_full() {
+    return this.size >= this.max_size
+  }
+
+  // Get frequency of a key
+  def frequency(key) {
+    if (this.frequencies[key] != nil) {
+      return this.frequencies[key]
+    } else {
+      return 0
+    }
+  }
+
+  def _increase_frequency(key) {
+    freq = this.frequencies[key]
+    this._remove_from_freq_list(key, freq)
+
+    new_freq = freq + 1
+    this.frequencies[key] = new_freq
+
+    if (this.freq_lists[new_freq] == nil) {
+      this.freq_lists[new_freq] = []
+    }
+    push(this.freq_lists[new_freq], key)
+
+    // Update min_freq if this was the last item in the old min_freq
+    if (freq == this.min_freq and len(this.freq_lists[freq]) == 0) {
+      this.min_freq = new_freq
+    }
+  }
+
+  def _remove_from_freq_list(key, freq) {
+    if (this.freq_lists[freq] == nil) {
+      return
+    }
+
+    new_list = []
+    i = 0
+    until (i >= len(this.freq_lists[freq])) {
+      if (this.freq_lists[freq][i] != key) {
+        push(new_list, this.freq_lists[freq][i])
+      }
+      i = i + 1
+    }
+    this.freq_lists[freq] = new_list
+
+    // Remove empty frequency lists
+    if (len(new_list) == 0) {
+      this.freq_lists[freq] = nil
+    }
+  }
+
+  def _evict_lfu() {
+    if (this.freq_lists[this.min_freq] == nil or len(this.freq_lists[this.min_freq]) == 0) {
+      return
+    }
+
+    // Remove the first key from the lowest frequency list
+    key_to_evict = this.freq_lists[this.min_freq][0]
+    this._remove_from_freq_list(key_to_evict, this.min_freq)
+
+    this.data[key_to_evict] = nil
+    this.frequencies[key_to_evict] = nil
+    this.size = this.size - 1
+
+    // Update min_freq if the list is now empty
+    if (len(this.freq_lists[this.min_freq]) == 0) {
+      this.freq_lists[this.min_freq] = nil
+      // Find next min_freq
+      freqs = keys(this.freq_lists)
+      if (len(freqs) > 0) {
+        min_f = freqs[0]
+        i = 1
+        until (i >= len(freqs)) {
+          if (freqs[i] < min_f) {
+            min_f = freqs[i]
+          }
+          i = i + 1
+        }
+        this.min_freq = min_f
+      } else {
+        this.min_freq = 0
+      }
+    }
+  }
+}
+
+// Simple in-memory cache (no eviction)
+open class SimpleCache {
+  def init() {
+    this.data = {}
+    this.size = 0
+  }
+
+  def get(key) {
+    entry = this.data[key]
+    if (entry != nil) {
+      return entry["value"]
+    } else {
+      return nil
+    }
+  }
+
+  def set(key, value) {
+    if (this.data[key] == nil) {
+      this.size = this.size + 1
+    }
+    this.data[key] = { "value": value }
+    return true
+  }
+
+  def has(key) {
+    return this.data[key] != nil
+  }
+
+  def delete(key) {
+    if (this.data[key] != nil) {
+      this.data[key] = nil
+      this.size = this.size - 1
+      return true
+    }
+    return false
+  }
+
+  def clear() {
+    this.data = {}
+    this.size = 0
+  }
+
+  def keys() {
+    return keys(this.data)
+  }
+
+  def values() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      if (this.data[k[i]] != nil) {
+        push(result, this.data[k[i]]["value"])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def entries() {
+    result = []
+    k = keys(this.data)
+    i = 0
+    until (i >= len(k)) {
+      if (this.data[k[i]] != nil) {
+        push(result, [k[i], this.data[k[i]]["value"]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def length() {
+    return this.size
+  }
+
+  def is_empty() {
+    return this.size == 0
+  }
+
+  def is_full() {
+    return false  // Never full
+  }
+}
+
+// Factory functions
+
+open def lru(max_size) {
+  return LRUCache(max_size)
+}
+
+open def ttl(max_size, default_ttl) {
+  return TTLCache(max_size, default_ttl)
+}
+
+open def lfu(max_size) {
+  return LFUCache(max_size)
+}
+
+open def simple() {
+  return SimpleCache()
+}

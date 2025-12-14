@@ -1,0 +1,10 @@
+// Test buffer only
+use @std.io as io
+use @std.buffer as buffer
+
+io.println("Testing buffer")
+
+// Try to access the class directly
+buf = buffer.Buffer("Hello")
+io.println("Length: " + buf.length())
+io.println("String: " + buf.to_string())

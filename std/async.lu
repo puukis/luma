@@ -1,0 +1,634 @@
+module @std.async
+
+use @std.collections as collections
+
+// Standard Async module for Luma
+// Asynchronous programming with promises and futures
+
+// Promise states
+open def PENDING() { return 0 }
+open def FULFILLED() { return 1 }
+open def REJECTED() { return 2 }
+
+// Promise class
+open class Promise {
+  def init(executor) {
+    this.state = PENDING()
+    this.value = nil
+    this.reason = nil
+    this.on_fulfilled = []
+    this.on_rejected = []
+    this._id = this._generate_id()
+
+    if (executor != nil) {
+      this._execute(executor)
+    }
+  }
+
+  def then(on_fulfilled, on_rejected) {
+    return Promise(lambda(resolve, reject) {
+      resolved = lambda(value) {
+        if (on_fulfilled != nil) {
+          maybe {
+            result = on_fulfilled(value)
+            if (result is Promise) {
+              result.then(resolve, reject)
+            } else {
+              resolve(result)
+            }
+          } otherwise (error) {
+            reject(error)
+          }
+        } else {
+          resolve(value)
+        }
+      }
+
+      rejected = lambda(reason) {
+        if (on_rejected != nil) {
+          maybe {
+            result = on_rejected(reason)
+            if (result is Promise) {
+              result.then(resolve, reject)
+            } else {
+              resolve(result)
+            }
+          } otherwise (error) {
+            reject(error)
+          }
+        } else {
+          reject(reason)
+        }
+      }
+
+      this._add_handlers(resolved, rejected)
+    })
+  }
+
+  def catch(on_rejected) {
+    return this.then(nil, on_rejected)
+  }
+
+  def finally(on_finally) {
+    // Store the callback to avoid scoping issues
+    callback = on_finally
+    return this.then(
+      lambda(value) {
+        if (callback != nil) {
+          callback()
+        }
+        return value
+      },
+      lambda(reason) {
+        if (callback != nil) {
+          callback()
+        }
+        return Promise.reject(reason)
+      }
+    )
+  }
+
+  def is_pending() {
+    return this.state == PENDING()
+  }
+
+  def is_fulfilled() {
+    return this.state == FULFILLED()
+  }
+
+  def is_rejected() {
+    return this.state == REJECTED()
+  }
+
+  def get_value() {
+    return this.value
+  }
+
+  def get_reason() {
+    return this.reason
+  }
+
+  def resolve(value) {
+    if (this.state != PENDING()) {
+      return
+    }
+
+    this.state = FULFILLED()
+    this.value = value
+    this._notify_handlers()
+  }
+
+  def reject(reason) {
+    if (this.state != PENDING()) {
+      return
+    }
+
+    this.state = REJECTED()
+    this.reason = reason
+    this._notify_handlers()
+  }
+
+  def _execute(executor) {
+    maybe {
+      executor(lambda(value) { this.resolve(value) }, lambda(reason) { this.reject(reason) })
+    } otherwise (error) {
+      this.reject(error)
+    }
+  }
+
+  def _add_handlers(on_fulfilled, on_rejected) {
+    if (this.state == PENDING()) {
+      push(this.on_fulfilled, on_fulfilled)
+      push(this.on_rejected, on_rejected)
+    } else if (this.state == FULFILLED()) {
+      this._schedule_callback(on_fulfilled, this.value)
+    } else if (this.state == REJECTED()) {
+      this._schedule_callback(on_rejected, this.reason)
+    }
+  }
+
+  def _notify_handlers() {
+    if (this.state == FULFILLED()) {
+      i = 0
+      until (i >= len(this.on_fulfilled)) {
+        this._schedule_callback(this.on_fulfilled[i], this.value)
+        i = i + 1
+      }
+    } else if (this.state == REJECTED()) {
+      i = 0
+      until (i >= len(this.on_rejected)) {
+        this._schedule_callback(this.on_rejected[i], this.reason)
+        i = i + 1
+      }
+    }
+
+    // Clear handlers
+    this.on_fulfilled = []
+    this.on_rejected = []
+  }
+
+  def _schedule_callback(callback, arg) {
+    // In a real async implementation, this would schedule for next tick
+    // For now, execute immediately
+    callback(arg)
+  }
+
+  def _generate_id() {
+    // Simple ID generation - in real implementation would be more robust
+    if (_next_promise_id == nil) {
+      _next_promise_id = 1
+    } else {
+      _next_promise_id = _next_promise_id + 1
+    }
+    return _next_promise_id
+  }
+}
+
+// Static methods on Promise
+open def resolve(value) {
+  promise = Promise()
+  promise.resolve(value)
+  return promise
+}
+
+open def reject(reason) {
+  promise = Promise()
+  promise.reject(reason)
+  return promise
+}
+
+open def all(promises) {
+  return Promise(lambda(resolve, reject) {
+    if (len(promises) == 0) {
+      resolve([])
+      return
+    }
+
+    results = []
+    completed = 0
+    has_rejected = false
+
+    check_completion = lambda() {
+      completed = completed + 1
+      if (completed == len(promises)) {
+        if (!has_rejected) {
+          resolve(results)
+        }
+      }
+    }
+
+    i = 0
+    until (i >= len(promises)) {
+      promise = promises[i]
+      index = i
+      promise.then(
+        lambda(value) {
+          results[index] = value
+          check_completion()
+        },
+        lambda(reason) {
+          if (!has_rejected) {
+            has_rejected = true
+            reject(reason)
+          }
+        }
+      )
+      i = i + 1
+    }
+  })
+}
+
+open def race(promises) {
+  return Promise(lambda(resolve, reject) {
+    i = 0
+    until (i >= len(promises)) {
+      promises[i].then(resolve, reject)
+      i = i + 1
+    }
+  })
+}
+
+open def any(promises) {
+  return Promise(lambda(resolve, reject) {
+    if (len(promises) == 0) {
+      reject("All promises were rejected")
+      return
+    }
+
+    errors = []
+    rejected_count = 0
+
+    i = 0
+    until (i >= len(promises)) {
+      index = i
+      promises[i].then(
+        resolve,
+        lambda(reason) {
+          errors[index] = reason
+          rejected_count = rejected_count + 1
+          if (rejected_count == len(promises)) {
+            reject("All promises were rejected")
+          }
+        }
+      )
+      i = i + 1
+    }
+  })
+}
+
+open def all_settled(promises) {
+  return Promise(lambda(resolve, reject) {
+    if (len(promises) == 0) {
+      resolve([])
+      return
+    }
+
+    results = []
+    completed = 0
+
+    check_completion = lambda() {
+      completed = completed + 1
+      if (completed == len(promises)) {
+        resolve(results)
+      }
+    }
+
+    i = 0
+    until (i >= len(promises)) {
+      index = i
+      promises[i].then(
+        lambda(value) {
+          results[index] = { "status": "fulfilled", "value": value }
+          check_completion()
+        },
+        lambda(reason) {
+          results[index] = { "status": "rejected", "reason": reason }
+          check_completion()
+        }
+      )
+      i = i + 1
+    }
+  })
+}
+
+// Future class (similar to Promise but with different API)
+open class Future {
+  def init() {
+    this.promise = Promise()
+  }
+
+  def resolve(value) {
+    this.promise.resolve(value)
+  }
+
+  def reject(reason) {
+    this.promise.reject(reason)
+  }
+
+  def then(on_fulfilled, on_rejected) {
+    return this.promise.then(on_fulfilled, on_rejected)
+  }
+
+  def catch(on_rejected) {
+    return this.promise.catch(on_rejected)
+  }
+
+  def finally(on_finally) {
+    return this.promise.finally(on_finally)
+  }
+
+  def is_ready() {
+    return !this.promise.is_pending()
+  }
+
+  def get() {
+    // This would block in a real implementation
+    // For now, just return the value if available
+    if (this.promise.is_fulfilled()) {
+      return this.promise.get_value()
+    } else if (this.promise.is_rejected()) {
+      // In a real implementation, this would throw
+      return nil
+    }
+    return nil  // Not ready
+  }
+
+  def wait() {
+    // This would block until the future is ready
+    // For now, just return immediately
+    return this
+  }
+}
+
+// Async utilities
+
+// Sleep for specified milliseconds
+// native def sleep(ms)
+open def sleep(ms) {
+  return Promise(lambda(resolve, reject) {
+    // Use native sleep function
+    _sleep(ms)
+    resolve(nil)
+  })
+}
+
+// Run function asynchronously
+open def run_async(func) {
+  return Promise(lambda(resolve, reject) {
+    maybe {
+      result = func()
+      resolve(result)
+    } otherwise (error) {
+      reject(error)
+    }
+  })
+}
+
+// Timeout wrapper for promises
+open def timeout(promise, ms) {
+  timeout_promise = Promise(lambda(resolve, reject) {
+    sleep(ms).then(lambda() {
+      reject("Operation timed out")
+    })
+  })
+
+  return Promise.race([promise, timeout_promise])
+}
+
+// Retry utility
+open def retry(func, max_attempts, delay) {
+  if (max_attempts == nil) {
+    max_attempts = 3
+  }
+  if (delay == nil) {
+    delay = 1000
+  }
+
+  return Promise(lambda(resolve, reject) {
+    attempt = lambda(attempt_num) {
+      run_async(func).then(
+        resolve,
+        lambda(error) {
+          if (attempt_num >= max_attempts) {
+            reject(error)
+          } else {
+            sleep(delay).then(lambda() {
+              attempt(attempt_num + 1)
+            })
+          }
+        }
+      )
+    }
+
+    attempt(1)
+  })
+}
+
+// Task queue for sequential execution
+open class TaskQueue {
+  def init() {
+    this.tasks = collections.Queue()
+    this.running = false
+  }
+
+  def add(task) {
+    this.tasks.enqueue(task)
+    this._process_queue()
+  }
+
+  def size() {
+    return this.tasks.size()
+  }
+
+  def is_empty() {
+    return this.tasks.is_empty()
+  }
+
+  def _process_queue() {
+    if (this.running or this.tasks.is_empty()) {
+      return
+    }
+
+    this.running = true
+    task = this.tasks.dequeue()
+
+    run_async(task).then(
+      lambda(result) {
+        this.running = false
+        this._process_queue()
+        return result
+      },
+      lambda(error) {
+        this.running = false
+        this._process_queue()
+        return error
+      }
+    )
+  }
+}
+
+// Event loop simulation (simplified)
+open class EventLoop {
+  def init() {
+    this.tasks = []
+    this.running = false
+  }
+
+  def schedule(func, delay) {
+    if (delay == nil) {
+      delay = 0
+    }
+
+    task = { "func": func, "delay": delay, "scheduled_at": this._now() }
+    push(this.tasks, task)
+
+    if (!this.running) {
+      this.start()
+    }
+  }
+
+  def start() {
+    if (this.running) {
+      return
+    }
+
+    this.running = true
+    this._run_loop()
+  }
+
+  def stop() {
+    this.running = false
+  }
+
+  def _run_loop() {
+    if (!this.running) {
+      return
+    }
+
+    now = this._now()
+    i = 0
+    while (i < len(this.tasks)) {
+      task = this.tasks[i]
+      if (now >= task["scheduled_at"] + task["delay"]) {
+        // Execute task
+        maybe {
+          task["func"]()
+        } otherwise (error) {
+          // Log error but continue
+        }
+
+        // Remove task
+        this.tasks = this.tasks.slice(0, i) + this.tasks.slice(i + 1)
+        i = i - 1
+      }
+      i = i + 1
+    }
+
+    // Schedule next iteration
+    if (len(this.tasks) > 0) {
+      this.schedule(lambda() { this._run_loop() }, 10)
+    } else {
+      this.running = false
+    }
+  }
+
+  def _now() {
+    // Simplified timestamp - in real implementation use datetime
+    if (this._start_time == nil) {
+      this._start_time = 0
+      return 0
+    }
+    this._start_time = this._start_time + 1
+    return this._start_time
+  }
+}
+
+// Global event loop
+_event_loop = nil
+
+open def get_event_loop() {
+  if (_event_loop == nil) {
+    _event_loop = EventLoop()
+  }
+  return _event_loop
+}
+
+open def set_timeout(func, delay) {
+  get_event_loop().schedule(func, delay)
+}
+
+// Simplified async function decorator (syntactic sugar)
+open def async(func) {
+  return lambda() {
+    args = arguments()
+    return run_async(lambda() { return func.apply(nil, args) })
+  }
+}
+
+// Await simulation (syntactic sugar)
+open def await(promise) {
+  // In a real implementation, this would be a language keyword
+  // For now, just return the promise
+  return promise
+}
+
+// Concurrent execution utilities
+
+open def parallel(tasks, concurrency) {
+  if (concurrency == nil) {
+    concurrency = len(tasks)
+  }
+
+  return Promise(lambda(resolve, reject) {
+    results = []
+    running = 0
+    completed = 0
+    index = 0
+
+    run_next = lambda() {
+      if (index >= len(tasks) and running == 0) {
+        resolve(results)
+        return
+      }
+
+      if (index >= len(tasks) or running >= concurrency) {
+        return
+      }
+
+      task_index = index
+      task = tasks[index]
+      index = index + 1
+      running = running + 1
+
+      run_async(task).then(
+        lambda(result) {
+          results[task_index] = result
+          running = running - 1
+          completed = completed + 1
+          run_next()
+        },
+        lambda(error) {
+          running = running - 1
+          reject(error)
+        }
+      )
+
+      run_next()
+    }
+
+    run_next()
+  })
+}
+
+open def map_async(items, mapper, concurrency) {
+  tasks = []
+  i = 0
+  until (i >= len(items)) {
+    item = items[i]
+    task = lambda() { return mapper(item) }
+    push(tasks, task)
+    i = i + 1
+  }
+
+  return parallel(tasks, concurrency)
+}

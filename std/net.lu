@@ -1,0 +1,437 @@
+module @std.net
+
+use @std.buffer as buffer
+use @std.async as async
+
+// Standard Net module for Luma
+// Networking utilities (DNS, IP addresses, etc.)
+
+// IP Address utilities
+
+// Check if string is a valid IPv4 address
+// native def is_ipv4(ip)
+open def is_ipv4(ip) {
+  return _is_ipv4(ip)
+}
+
+// Check if string is a valid IPv6 address
+// native def is_ipv6(ip)
+open def is_ipv6(ip) {
+  return _is_ipv6(ip)
+}
+
+// Check if string is a valid IP address (IPv4 or IPv6)
+open def is_ip(ip) {
+  return is_ipv4(ip) or is_ipv6(ip)
+}
+
+// Parse IPv4 address to integer
+// native def ipv4_to_int(ip)
+open def ipv4_to_int(ip) {
+  return _ipv4_to_int(ip)
+}
+
+// Convert integer to IPv4 address
+// native def int_to_ipv4(num)
+open def int_to_ipv4(num) {
+  return _int_to_ipv4(num)
+}
+
+// Get network address from IP and subnet mask
+// Placeholder - needs bitwise operations
+open def network_address(ip, mask) {
+  // TODO: Implement with bitwise operations
+  return ip
+}
+
+// Get broadcast address from IP and subnet mask
+// Placeholder - needs bitwise operations
+open def broadcast_address(ip, mask) {
+  // TODO: Implement with bitwise operations
+  return ip
+}
+
+// Check if IP is in subnet
+// Placeholder - needs bitwise operations
+open def is_in_subnet(ip, network, mask) {
+  // TODO: Implement with bitwise operations
+  return false
+}
+
+// Convert CIDR notation to subnet mask
+// Placeholder - needs bitwise operations
+open def cidr_to_mask(cidr) {
+  // TODO: Implement with bitwise operations
+  return "255.255.255.0"
+}
+
+// Convert subnet mask to CIDR notation
+// Placeholder - needs bitwise operations
+open def mask_to_cidr(mask) {
+  // TODO: Implement with bitwise operations
+  return 24
+}
+
+// DNS utilities
+
+// DNS record types
+open def DNS_A() { return 1 }
+open def DNS_AAAA() { return 28 }
+open def DNS_CNAME() { return 5 }
+open def DNS_MX() { return 15 }
+open def DNS_TXT() { return 16 }
+open def DNS_SRV() { return 33 }
+open def DNS_PTR() { return 12 }
+open def DNS_NS() { return 2 }
+
+// DNS lookup result
+open class DNSResult {
+  def init(addresses, type) {
+    this.addresses = addresses
+    if (this.addresses == nil) {
+      this.addresses = []
+    }
+    this.type = type
+    if (this.type == nil) {
+      this.type = DNS_A()
+    }
+    this.error = nil
+  }
+
+  def success() {
+    return this.error == nil
+  }
+
+  def failed() {
+    return this.error != nil
+  }
+
+  def set_error(error) {
+    this.error = error
+  }
+
+  def get_addresses() {
+    return this.addresses
+  }
+
+  def get_type() {
+    return this.type
+  }
+
+  def get_error() {
+    return this.error
+  }
+}
+
+// DNS lookup (IPv4)
+// native def dns_lookup_ipv4(hostname)
+open def dns_lookup_ipv4(hostname) {
+  return _dns_lookup(hostname)
+}
+
+// DNS lookup (IPv6)
+// native def dns_lookup_ipv6(hostname)
+open def dns_lookup_ipv6(hostname) {
+  // Placeholder - needs backend implementation
+  result = DNSResult([], DNS_AAAA())
+  result.set_error("DNS lookup not implemented")
+  return result
+}
+
+// DNS lookup (any)
+// native def dns_lookup(hostname)
+open def dns_lookup(hostname) {
+  // Placeholder - needs backend implementation
+  result = DNSResult([], DNS_A())
+  result.set_error("DNS lookup not implemented")
+  return result
+}
+
+// Reverse DNS lookup
+// native def dns_reverse_lookup(ip)
+open def dns_reverse_lookup(ip) {
+  // Placeholder - needs backend implementation
+  result = DNSResult([], DNS_PTR())
+  result.set_error("Reverse DNS lookup not implemented")
+  return result
+}
+
+// Get local hostname
+// native def get_hostname()
+open def get_hostname() {
+  return _get_hostname()
+}
+
+// Get local IP addresses
+// native def get_local_ips()
+open def get_local_ips() {
+  // Placeholder - needs backend implementation
+  return ["127.0.0.1"]
+}
+
+// Network interface utilities
+
+open class NetworkInterface {
+  def init(name, addresses, mac, mtu, up) {
+    this.name = name
+    this.addresses = addresses
+    if (this.addresses == nil) {
+      this.addresses = []
+    }
+    this.mac = mac
+    this.mtu = mtu
+    this.up = up
+    if (this.up == nil) {
+      this.up = false
+    }
+  }
+
+  def get_name() {
+    return this.name
+  }
+
+  def get_addresses() {
+    return this.addresses
+  }
+
+  def get_mac() {
+    return this.mac
+  }
+
+  def get_mtu() {
+    return this.mtu
+  }
+
+  def is_up() {
+    return this.up
+  }
+
+  def has_ipv4() {
+    i = 0
+    until (i >= len(this.addresses)) {
+      if (is_ipv4(this.addresses[i])) {
+        return true
+      }
+      i = i + 1
+    }
+    return false
+  }
+
+  def has_ipv6() {
+    i = 0
+    until (i >= len(this.addresses)) {
+      if (is_ipv6(this.addresses[i])) {
+        return true
+      }
+      i = i + 1
+    }
+    return false
+  }
+
+  def get_ipv4_addresses() {
+    result = []
+    i = 0
+    until (i >= len(this.addresses)) {
+      if (is_ipv4(this.addresses[i])) {
+        push(result, this.addresses[i])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  def get_ipv6_addresses() {
+    result = []
+    i = 0
+    until (i >= len(this.addresses)) {
+      if (is_ipv6(this.addresses[i])) {
+        push(result, this.addresses[i])
+      }
+      i = i + 1
+    }
+    return result
+  }
+}
+
+// Get network interfaces
+// native def get_network_interfaces()
+open def get_network_interfaces() {
+  // Placeholder - needs backend implementation
+  return []
+}
+
+// Get default gateway
+// native def get_default_gateway()
+open def get_default_gateway() {
+  // Placeholder - needs backend implementation
+  return nil
+}
+
+// Port utilities
+
+// Check if port is valid (1-65535)
+open def is_valid_port(port) {
+  return port is Number and port >= 1 and port <= 65535
+}
+
+// Get list of well-known ports
+open def well_known_ports() {
+  return {
+    20: "FTP Data",
+    21: "FTP Control",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    993: "IMAPS",
+    995: "POP3S",
+    3306: "MySQL",
+    5432: "PostgreSQL"
+  }
+}
+
+// Get service name for port
+open def get_service_name(port) {
+  ports = well_known_ports()
+  if (ports[port] != nil) {
+    return ports[port]
+  } else {
+    return "Unknown"
+  }
+}
+
+// URL utilities
+
+open class URLInfo {
+  def init(href, protocol, hostname, port, pathname, search, hash) {
+    this.href = href
+    this.protocol = protocol
+    this.hostname = hostname
+    this.port = port
+    this.pathname = pathname
+    if (this.pathname == nil) {
+      this.pathname = "/"
+    }
+    this.search = search
+    this.hash = hash
+  }
+
+  def get_href() {
+    return this.href
+  }
+
+  def get_protocol() {
+    return this.protocol
+  }
+
+  def get_hostname() {
+    return this.hostname
+  }
+
+  def get_port() {
+    return this.port
+  }
+
+  def get_pathname() {
+    return this.pathname
+  }
+
+  def get_search() {
+    return this.search
+  }
+
+  def get_hash() {
+    return this.hash
+  }
+
+  def to_string() {
+    return this.href
+  }
+}
+
+// Parse URL
+// native def parse_url(url_str)
+open def parse_url(url_str) {
+  return _parse_url(url_str)
+}
+
+// HTTP utilities (basic)
+
+// HTTP methods
+open def HTTP_GET() { return "GET" }
+open def HTTP_POST() { return "POST" }
+open def HTTP_PUT() { return "PUT" }
+open def HTTP_DELETE() { return "DELETE" }
+open def HTTP_PATCH() { return "PATCH" }
+open def HTTP_HEAD() { return "HEAD" }
+open def HTTP_OPTIONS() { return "OPTIONS" }
+
+// HTTP status codes
+open def HTTP_OK() { return 200 }
+open def HTTP_CREATED() { return 201 }
+open def HTTP_BAD_REQUEST() { return 400 }
+open def HTTP_UNAUTHORIZED() { return 401 }
+open def HTTP_FORBIDDEN() { return 403 }
+open def HTTP_NOT_FOUND() { return 404 }
+open def HTTP_INTERNAL_ERROR() { return 500 }
+
+// HTTP response class
+open class HTTPResponse {
+  def init(status, headers, body) {
+    this.status = status
+    if (this.status == nil) {
+      this.status = 200
+    }
+    this.headers = headers
+    if (this.headers == nil) {
+      this.headers = {}
+    }
+    this.body = body
+    if (this.body == nil) {
+      this.body = ""
+    }
+  }
+
+  def get_status() {
+    return this.status
+  }
+
+  def get_headers() {
+    return this.headers
+  }
+
+  def get_header(name) {
+    return this.headers[name]
+  }
+
+  def get_body() {
+    return this.body
+  }
+
+  def is_success() {
+    return this.status >= 200 and this.status < 300
+  }
+
+  def is_error() {
+    return this.status >= 400
+  }
+}
+
+// Simple HTTP GET request
+// This would typically be in the http.lu module, but including basic version here
+// native def http_get(url, headers)
+open def http_get(url, headers) {
+  // Placeholder - needs backend implementation
+  return HTTPResponse(200, {}, "HTTP GET not implemented")
+}
+
+// Simple HTTP POST request
+// native def http_post(url, data, headers)
+open def http_post(url, data, headers) {
+  // Placeholder - needs backend implementation
+  return HTTPResponse(200, {}, "HTTP POST not implemented")
+}

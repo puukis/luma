@@ -1,0 +1,583 @@
+module @std.socket
+
+use @std.buffer as buffer
+use @std.async as async
+use @std.net as net
+
+// Standard Socket module for Luma
+// TCP and UDP socket utilities
+
+// Socket types
+open def SOCK_STREAM() { return 1 }    // TCP
+open def SOCK_DGRAM() { return 2 }     // UDP
+open def SOCK_RAW() { return 3 }       // Raw
+
+// Address families
+open def AF_INET() { return 2 }        // IPv4
+open def AF_INET6() { return 10 }      // IPv6
+open def AF_UNIX() { return 1 }        // Unix domain
+
+// Socket states
+open def SOCK_CLOSED() { return 0 }
+open def SOCK_CONNECTING() { return 1 }
+open def SOCK_CONNECTED() { return 2 }
+open def SOCK_LISTENING() { return 3 }
+open def SOCK_BOUND() { return 4 }
+
+// Socket options
+open def SO_REUSEADDR() { return 2 }
+open def SO_KEEPALIVE() { return 9 }
+open def SO_RCVBUF() { return 8 }
+open def SO_SNDBUF() { return 7 }
+open def SO_TIMEOUT() { return 4102 }
+
+// Base Socket class
+open class Socket {
+  def init(family, type) {
+    this.family = family
+    if (this.family == nil) {
+      this.family = AF_INET()
+    }
+    this.type = type
+    if (this.type == nil) {
+      this.type = SOCK_STREAM()
+    }
+    this.state = SOCK_CLOSED()
+    this.fd = nil  // File descriptor
+    this.local_address = nil
+    this.remote_address = nil
+    this.options = {}
+  }
+
+  // Create the socket
+  // native def _create_socket(family, type)
+  def create() {
+    if (this.fd != nil) {
+      return true
+    }
+
+    this.fd = _create(this.family, this.type)
+    if (this.fd == nil) {
+      return false
+    }
+
+    this.state = SOCK_CLOSED()
+    return true
+  }
+
+  // Bind socket to address
+  // native def _bind_socket(fd, address, port)
+  def bind(address, port) {
+    if (this.fd == nil and !this.create()) {
+      return false
+    }
+
+    if (!net.is_valid_port(port)) {
+      return false
+    }
+
+    if (_bind(this.fd, address, port)) {
+      this.local_address = { "address": address, "port": port }
+      this.state = SOCK_BOUND()
+      return true
+    }
+    return false
+  }
+
+  // Connect to remote address
+  // native def _connect_socket(fd, address, port)
+  def connect(address, port) {
+    if (this.fd == nil and !this.create()) {
+      return async.Promise.reject("Failed to create socket")
+    }
+
+    if (!net.is_valid_port(port)) {
+      return async.Promise.reject("Invalid port")
+    }
+
+    this.state = SOCK_CONNECTING()
+
+    return async.Promise(lambda(resolve, reject) {
+      if (_connect(this.fd, address, port)) {
+        this.remote_address = { "address": address, "port": port }
+        this.state = SOCK_CONNECTED()
+        resolve(true)
+      } else {
+        reject("Connection failed")
+      }
+    })
+  }
+
+  // Listen for connections (server mode)
+  // native def _listen_socket(fd, backlog)
+  def listen(backlog) {
+    if (this.fd == nil) {
+      return false
+    }
+
+    if (backlog == nil) {
+      backlog = 5
+    }
+
+    if (_listen(this.fd, backlog)) {
+      this.state = SOCK_LISTENING()
+      return true
+    }
+    return false
+  }
+
+  // Accept incoming connection
+  // native def _accept_socket(fd)
+  def accept() {
+    if (this.state != SOCK_LISTENING()) {
+      return nil
+    }
+
+    result = _accept(this.fd)
+    if (result == nil) {
+      return nil
+    }
+
+    client_socket = Socket(this.family, this.type)
+    client_socket.fd = result["fd"]
+    client_socket.state = SOCK_CONNECTED()
+    client_socket.local_address = this.local_address
+    client_socket.remote_address = { "address": result["address"], "port": result["port"] }
+    return client_socket
+  }
+
+  // Send data
+  // native def _send_socket(fd, data, flags)
+  def send(data, flags) {
+    if (this.state != SOCK_CONNECTED()) {
+      return async.Promise.reject("Socket not connected")
+    }
+
+    return async.Promise(lambda(resolve, reject) {
+      flags_val = 0
+      if (flags != nil) {
+        flags_val = flags
+      }
+      result = _send(this.fd, data, flags_val)
+      if (result == nil) {
+        reject("Send failed")
+      } else {
+        resolve(result)
+      }
+    })
+  }
+
+  // Receive data
+  // native def _recv_socket(fd, max_bytes, flags)
+  def recv(max_bytes, flags) {
+    if (this.state != SOCK_CONNECTED()) {
+      return async.Promise.reject("Socket not connected")
+    }
+
+    if (max_bytes == nil) {
+      max_bytes = 4096
+    }
+
+    return async.Promise(lambda(resolve, reject) {
+      flags_val = 0
+      if (flags != nil) {
+        flags_val = flags
+      }
+      result = _recv(this.fd, max_bytes, flags_val)
+      if (result == nil) {
+        reject("Receive failed")
+      } else {
+        resolve(result)
+      }
+    })
+  }
+
+  // Send data to specific address (UDP)
+  // native def _sendto_socket(fd, data, address, port, flags)
+  def sendto(data, address, port, flags) {
+    if (this.type != SOCK_DGRAM()) {
+      return async.Promise.reject("sendto only supported for UDP sockets")
+    }
+
+    if (!net.is_valid_port(port)) {
+      return async.Promise.reject("Invalid port")
+    }
+
+    return async.Promise(lambda(resolve, reject) {
+      flags_val = 0
+      if (flags != nil) {
+        flags_val = flags
+      }
+      result = _sendto(this.fd, data, address, port, flags_val)
+      if (result == nil) {
+        reject("SendTo failed")
+      } else {
+        resolve(result)
+      }
+    })
+  }
+
+  // Receive data and sender address (UDP)
+  // native def _recvfrom_socket(fd, max_bytes, flags)
+  def recvfrom(max_bytes, flags) {
+    if (this.type != SOCK_DGRAM()) {
+      return async.Promise.reject("recvfrom only supported for UDP sockets")
+    }
+
+    if (max_bytes == nil) {
+      max_bytes = 4096
+    }
+
+    return async.Promise(lambda(resolve, reject) {
+      flags_val = 0
+      if (flags != nil) {
+        flags_val = flags
+      }
+      result = _recvfrom(this.fd, max_bytes, flags_val)
+      if (result == nil) {
+        reject("RecvFrom failed")
+      } else {
+        resolve(result)
+      }
+    })
+  }
+
+  // Close socket
+  // native def _close_socket(fd)
+  def close() {
+    if (this.fd == nil) {
+      return true
+    }
+
+    if (_close(this.fd)) {
+      this.fd = nil
+      this.state = SOCK_CLOSED()
+      this.local_address = nil
+      this.remote_address = nil
+      return true
+    }
+    return false
+  }
+
+  // Set socket option
+  // native def _set_socket_option(fd, option, value)
+  def set_option(option, value) {
+    if (this.fd == nil) {
+      return false
+    }
+
+    this.options[option] = value
+    // Placeholder - needs backend implementation
+    return true
+  }
+
+  // Get socket option
+  // native def _get_socket_option(fd, option)
+  def get_option(option) {
+    if (this.fd == nil) {
+      return nil
+    }
+
+    return this.options[option]
+  }
+
+  // Get local address
+  def get_local_address() {
+    return this.local_address
+  }
+
+  // Get remote address
+  def get_remote_address() {
+    return this.remote_address
+  }
+
+  // Get socket state
+  def get_state() {
+    return this.state
+  }
+
+  // Check if socket is connected
+  def is_connected() {
+    return this.state == SOCK_CONNECTED()
+  }
+
+  // Check if socket is closed
+  def is_closed() {
+    return this.state == SOCK_CLOSED()
+  }
+
+  // Get socket family
+  def get_family() {
+    return this.family
+  }
+
+  // Get socket type
+  def get_type() {
+    return this.type
+  }
+}
+
+// TCP Socket class
+open class TCPSocket {
+  def init() {
+    this.socket = Socket(AF_INET(), SOCK_STREAM())
+  }
+
+  def create() {
+    return this.socket.create()
+  }
+
+  def bind(address, port) {
+    return this.socket.bind(address, port)
+  }
+
+  def connect(address, port) {
+    return this.socket.connect(address, port)
+  }
+
+  def listen(backlog) {
+    return this.socket.listen(backlog)
+  }
+
+  def accept() {
+    client_raw = this.socket.accept()
+    if (client_raw == nil) {
+      return nil
+    }
+
+    client = TCPSocket()
+    client.socket = client_raw
+    return client
+  }
+
+  def send(data) {
+    return this.socket.send(data, 0)
+  }
+
+  def recv(max_bytes) {
+    return this.socket.recv(max_bytes, 0)
+  }
+
+  def close() {
+    return this.socket.close()
+  }
+
+  def set_option(option, value) {
+    return this.socket.set_option(option, value)
+  }
+
+  def get_option(option) {
+    return this.socket.get_option(option)
+  }
+
+  def get_local_address() {
+    return this.socket.get_local_address()
+  }
+
+  def get_remote_address() {
+    return this.socket.get_remote_address()
+  }
+
+  def get_state() {
+    return this.socket.get_state()
+  }
+
+  def is_connected() {
+    return this.socket.is_connected()
+  }
+
+  def is_closed() {
+    return this.socket.is_closed()
+  }
+
+  // Send all data (ensures complete transmission)
+  def send_all(data) {
+    return async.Promise(lambda(resolve, reject) {
+      total_sent = 0
+
+      send_chunk = lambda() {
+        if (total_sent >= len(data)) {
+          resolve(total_sent)
+          return
+        }
+
+        chunk = data.slice(total_sent, total_sent + 4096)
+        this.send(chunk).then(
+          lambda(sent) {
+            total_sent = total_sent + sent
+            send_chunk()
+          },
+          reject
+        )
+      }
+
+      send_chunk()
+    })
+  }
+
+  // Receive all available data until connection closes
+  def recv_all() {
+    return async.Promise(lambda(resolve, reject) {
+      chunks = []
+
+      recv_chunk = lambda() {
+        this.recv(4096).then(
+          lambda(chunk) {
+            if (len(chunk) == 0) {
+              // Connection closed
+              resolve(join(chunks, ""))
+            } else {
+              push(chunks, chunk)
+              recv_chunk()
+            }
+          },
+          reject
+        )
+      }
+
+      recv_chunk()
+    })
+  }
+
+  // Send data with timeout
+  def send_timeout(data, timeout_ms) {
+    return async.timeout(this.send(data), timeout_ms)
+  }
+
+  // Receive data with timeout
+  def recv_timeout(max_bytes, timeout_ms) {
+    return async.timeout(this.recv(max_bytes), timeout_ms)
+  }
+}
+
+// UDP Socket class
+open class UDPSocket {
+  def init() {
+    this.socket = Socket(AF_INET(), SOCK_DGRAM())
+  }
+
+  def create() {
+    return this.socket.create()
+  }
+
+  def bind(address, port) {
+    return this.socket.bind(address, port)
+  }
+
+  def sendto(data, address, port) {
+    return this.socket.sendto(data, address, port, 0)
+  }
+
+  def recvfrom(max_bytes) {
+    return this.socket.recvfrom(max_bytes, 0)
+  }
+
+  def close() {
+    return this.socket.close()
+  }
+
+  def set_option(option, value) {
+    return this.socket.set_option(option, value)
+  }
+
+  def get_option(option) {
+    return this.socket.get_option(option)
+  }
+
+  def get_local_address() {
+    return this.socket.get_local_address()
+  }
+
+  def get_state() {
+    return this.socket.get_state()
+  }
+
+  def is_closed() {
+    return this.socket.is_closed()
+  }
+
+  // Connect to remote address (for send/recv without address)
+  def connect(address, port) {
+    return this.socket.connect(address, port)
+  }
+
+  def send(data) {
+    return this.socket.send(data, 0)
+  }
+
+  def recv(max_bytes) {
+    return this.socket.recv(max_bytes, 0)
+  }
+
+  def is_connected() {
+    return this.socket.is_connected()
+  }
+}
+
+// Utility functions
+
+// Create TCP socket
+open def tcp_socket() {
+  return TCPSocket()
+}
+
+// Create UDP socket
+open def udp_socket() {
+  return UDPSocket()
+}
+
+// Create server socket (TCP)
+open def create_server(host, port, backlog) {
+  if (backlog == nil) {
+    backlog = 5
+  }
+
+  socket = TCPSocket()
+  if (!socket.create()) {
+    return nil
+  }
+
+  if (!socket.bind(host, port)) {
+    socket.close()
+    return nil
+  }
+
+  if (!socket.listen(backlog)) {
+    socket.close()
+    return nil
+  }
+
+  return socket
+}
+
+// Simple TCP client
+open def create_connection(host, port) {
+  socket = TCPSocket()
+  if (!socket.create()) {
+    return async.Promise.reject("Failed to create socket")
+  }
+
+  return socket.connect(host, port).then(
+    lambda() { return socket },
+    lambda(error) {
+      socket.close()
+      return async.Promise.reject(error)
+    }
+  )
+}
+
+// Simple UDP client
+open def create_udp_connection(host, port) {
+  socket = UDPSocket()
+  if (!socket.create()) {
+    return async.Promise.reject("Failed to create socket")
+  }
+
+  return socket.connect(host, port).then(
+    lambda() { return socket },
+    lambda(error) {
+      socket.close()
+      return async.Promise.reject(error)
+    }
+  )
+}

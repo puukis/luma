@@ -46,8 +46,10 @@ private:
   ExprPtr logicalOr();
   ExprPtr logicalAnd();
   ExprPtr equality();
+  ExprPtr bitwiseOr();
   ExprPtr comparison();
   ExprPtr term();
+  ExprPtr shift();
   ExprPtr factor();
   ExprPtr unary();
   ExprPtr call();

@@ -1,0 +1,53 @@
+// Test new standard libraries
+
+use @std.io as io
+use @std.buffer as buffer
+use @std.cache as cache
+use @std.async as async
+use @std.net as net
+
+io.println("🧪 Testing New Standard Libraries")
+io.println("==================================")
+
+// Test Buffer
+io.println("\n📦 Buffer Library:")
+buf = buffer.Buffer("Hello World")
+io.println("Buffer length: " + buf.length())
+io.println("Buffer to string: " + buf.to_string())
+io.println("Buffer to hex: " + buf.to_hex())
+
+// Test Cache
+io.println("\n💾 Cache Library:")
+lru = cache.lru(5)
+lru.set("key1", "value1")
+lru.set("key2", "value2")
+io.println("LRU cache get key1: " + lru.get("key1"))
+io.println("LRU cache size: " + lru.length())
+
+ttl_cache = cache.ttl(10, 60)  // 10 items, 60 second TTL
+ttl_cache.set("temp", "temporary data", 30)
+io.println("TTL cache has temp: " + ttl_cache.has("temp"))
+
+// Test Async
+io.println("\n⚡ Async Library:")
+promise = async.Promise(lambda(resolve, reject) {
+  resolve("Async result!")
+})
+
+promise.then(lambda(value) {
+  io.println("Promise resolved: " + value)
+})
+
+// Test Net
+io.println("\n🌐 Net Library:")
+io.println("Is 192.168.1.1 IPv4? " + net.is_ipv4("192.168.1.1"))
+io.println("Is 2001:db8::1 IPv6? " + net.is_ipv6("2001:db8::1"))
+
+ip_num = net.ipv4_to_int("192.168.1.1")
+io.println("192.168.1.1 as int: " + ip_num)
+io.println("Back to IP: " + net.int_to_ipv4(ip_num))
+
+hostname = net.get_hostname()
+io.println("Hostname: " + hostname)
+
+io.println("\n✅ All new libraries loaded successfully!")

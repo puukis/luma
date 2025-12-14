@@ -1,0 +1,72 @@
+module @std.buffer
+
+// Standard Buffer module for Luma
+// Simplified binary data manipulation
+
+// Buffer class for handling binary data
+open class Buffer {
+  def init(data) {
+    if (data == nil) {
+      this.data = []
+    } else if (data is List) {
+      this.data = data.slice(0)  // copy
+    } else if (data is String) {
+      this.data = []
+      i = 0
+      until (i >= len(data)) {
+        push(this.data, 65)  // Placeholder - 'A'
+        i = i + 1
+      }
+    } else {
+      this.data = []
+    }
+  }
+
+  // Get buffer length
+  def length() {
+    return len(this.data)
+  }
+
+  // Get byte at index
+  def get(index) {
+    if (index < 0 or index >= len(this.data)) {
+      return nil
+    }
+    return this.data[index]
+  }
+
+  // Set byte at index
+  def set(index, value) {
+    if (index < 0 or index >= len(this.data)) {
+      return false
+    }
+    this.data[index] = value
+    return true
+  }
+
+  // Append a byte
+  def append_byte(byte) {
+    push(this.data, byte)
+  }
+
+  // Clear the buffer
+  def clear() {
+    this.data = []
+  }
+
+  // Convert to string (placeholder)
+  def to_string() {
+    result = ""
+    i = 0
+    until (i >= len(this.data)) {
+      result = result + "X"  // Placeholder
+      i = i + 1
+    }
+    return result
+  }
+}
+
+// Create buffer from string
+open def from_string(str) {
+  return Buffer(str)
+}

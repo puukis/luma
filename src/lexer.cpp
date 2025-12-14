@@ -111,6 +111,12 @@ void Lexer::scanToken() {
   case '*':
     addToken(TokenType::Star);
     break;
+  case '&':
+    addToken(TokenType::Ampersand);
+    break;
+  case '|':
+    addToken(TokenType::Pipe);
+    break;
 
   case '!':
     addToken(match('=') ? TokenType::BangEqual : TokenType::Bang);
@@ -119,7 +125,9 @@ void Lexer::scanToken() {
     addToken(match('=') ? TokenType::EqualEqual : TokenType::Equal);
     break;
   case '<':
-    if (match('-')) {
+    if (match('<')) {
+      addToken(TokenType::ShiftLeft); // <<
+    } else if (match('-')) {
       if (match('>')) {
         addToken(TokenType::Swap); // <->
       } else {
@@ -132,7 +140,11 @@ void Lexer::scanToken() {
     }
     break;
   case '>':
-    addToken(match('=') ? TokenType::GreaterEqual : TokenType::Greater);
+    if (match('>')) {
+      addToken(TokenType::ShiftRight); // >>
+    } else {
+      addToken(match('=') ? TokenType::GreaterEqual : TokenType::Greater);
+    }
     break;
 
   case '/':

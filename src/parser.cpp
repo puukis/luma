@@ -431,8 +431,18 @@ ExprPtr Parser::logicalAnd() {
 }
 
 ExprPtr Parser::equality() {
-  auto expr = comparison();
+  auto expr = bitwiseOr();
   while (match({TokenType::BangEqual, TokenType::EqualEqual})) {
+    Token op = previous();
+    auto right = bitwiseOr();
+    expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
+  }
+  return expr;
+}
+
+ExprPtr Parser::bitwiseOr() {
+  auto expr = comparison();
+  while (match({TokenType::Pipe})) {
     Token op = previous();
     auto right = comparison();
     expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
@@ -451,9 +461,9 @@ ExprPtr Parser::comparison() {
   return expr;
 }
 
-ExprPtr Parser::term() {
+ExprPtr Parser::shift() {
   auto expr = factor();
-  while (match({TokenType::Plus, TokenType::Minus})) {
+  while (match({TokenType::ShiftLeft, TokenType::ShiftRight})) {
     Token op = previous();
     auto right = factor();
     expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
@@ -461,9 +471,19 @@ ExprPtr Parser::term() {
   return expr;
 }
 
+ExprPtr Parser::term() {
+  auto expr = shift();
+  while (match({TokenType::Plus, TokenType::Minus})) {
+    Token op = previous();
+    auto right = shift();
+    expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));
+  }
+  return expr;
+}
+
 ExprPtr Parser::factor() {
   auto expr = unary();
-  while (match({TokenType::Star, TokenType::Slash})) {
+  while (match({TokenType::Star, TokenType::Slash, TokenType::Ampersand})) {
     Token op = previous();
     auto right = unary();
     expr = std::make_unique<BinaryExpr>(std::move(expr), op, std::move(right));

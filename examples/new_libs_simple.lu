@@ -1,0 +1,32 @@
+// Test new standard libraries (simplified)
+
+use @std.io as io
+use @std.buffer as buffer
+use @std.cache as cache
+use @std.net as net
+
+io.println("🧪 Testing New Standard Libraries")
+io.println("==================================")
+
+// Test Buffer
+io.println("\n📦 Buffer Library:")
+buf = buffer.Buffer("Hello World")
+io.println("Buffer length: " + buf.length())
+io.println("Buffer to string: " + buf.to_string())
+
+// Test Cache
+io.println("\n💾 Cache Library:")
+lru = cache.lru(5)
+lru.set("key1", "value1")
+lru.set("key2", "value2")
+io.println("LRU cache get key1: " + lru.get("key1"))
+io.println("LRU cache size: " + lru.length())
+
+// Test Net
+io.println("\n🌐 Net Library:")
+io.println("Is 192.168.1.1 IPv4? " + net.is_ipv4("192.168.1.1"))
+
+hostname = net.get_hostname()
+io.println("Hostname: " + hostname)
+
+io.println("\n✅ Basic new libraries work!")

@@ -18,6 +18,13 @@
 #include <thread>
 #include <unistd.h>
 #include <limits.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <cstring>
 
 namespace fs = std::filesystem;
 
@@ -101,6 +108,32 @@ static Value nativeUrlFormat(const std::vector<Value> &args);
 static Value nativeUrlParseQuery(const std::vector<Value> &args);
 static Value nativeUrlBuildQuery(const std::vector<Value> &args);
 static Value nativeUrlResolve(const std::vector<Value> &args);
+
+// Async module natives
+static Value nativeAsyncSleep(const std::vector<Value> &args);
+
+// Net module natives
+static Value nativeNetIsIpv4(const std::vector<Value> &args);
+static Value nativeNetIsIpv6(const std::vector<Value> &args);
+static Value nativeNetIpv4ToInt(const std::vector<Value> &args);
+static Value nativeNetIntToIpv4(const std::vector<Value> &args);
+static Value nativeNetDnsLookup(const std::vector<Value> &args);
+static Value nativeNetGetHostname(const std::vector<Value> &args);
+static Value nativeNetParseUrl(const std::vector<Value> &args);
+
+// Socket module natives
+static Value nativeSocketCreate(const std::vector<Value> &args);
+static Value nativeSocketBind(const std::vector<Value> &args);
+static Value nativeSocketListen(const std::vector<Value> &args);
+static Value nativeSocketAccept(const std::vector<Value> &args);
+static Value nativeSocketConnect(const std::vector<Value> &args);
+static Value nativeSocketSend(const std::vector<Value> &args);
+static Value nativeSocketRecv(const std::vector<Value> &args);
+static Value nativeSocketSendTo(const std::vector<Value> &args);
+static Value nativeSocketRecvFrom(const std::vector<Value> &args);
+static Value nativeSocketClose(const std::vector<Value> &args);
+static Value nativeSocketSetOption(const std::vector<Value> &args);
+static Value nativeSocketGetOption(const std::vector<Value> &args);
 
 
 Interpreter::Interpreter() {
@@ -543,6 +576,22 @@ Value Interpreter::evaluate(const Expr &expr) {
       if (std::get<double>(right) == 0.0)
         throw std::runtime_error("Runtime error: division by zero.");
       return std::get<double>(left) / std::get<double>(right);
+    case TokenType::Ampersand:
+      requireNumber(left, "bitwise '&'");
+      requireNumber(right, "bitwise '&'");
+      return static_cast<double>(static_cast<int64_t>(std::get<double>(left)) & static_cast<int64_t>(std::get<double>(right)));
+    case TokenType::Pipe:
+      requireNumber(left, "bitwise '|'");
+      requireNumber(right, "bitwise '|'");
+      return static_cast<double>(static_cast<int64_t>(std::get<double>(left)) | static_cast<int64_t>(std::get<double>(right)));
+    case TokenType::ShiftLeft:
+      requireNumber(left, "bitwise '<<'");
+      requireNumber(right, "bitwise '<<'");
+      return static_cast<double>(static_cast<int64_t>(std::get<double>(left)) << static_cast<int64_t>(std::get<double>(right)));
+    case TokenType::ShiftRight:
+      requireNumber(left, "bitwise '>>'");
+      requireNumber(right, "bitwise '>>'");
+      return static_cast<double>(static_cast<int64_t>(std::get<double>(left)) >> static_cast<int64_t>(std::get<double>(right)));
     case TokenType::Greater:
       requireNumber(left, "comparison");
       requireNumber(right, "comparison");
@@ -888,6 +937,381 @@ static Value nativeTimeSleep(const std::vector<Value> &args) {
     if (auto ms = std::get_if<double>(&args[0])) {
         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(*ms)));
     }
+    return std::monostate{};
+}
+
+// Async module natives
+static Value nativeAsyncSleep(const std::vector<Value> &args) {
+    if (auto ms = std::get_if<double>(&args[0])) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(*ms)));
+    }
+    return std::monostate{};
+}
+
+// Net module natives
+static Value nativeNetIsIpv4(const std::vector<Value> &args) {
+    if (auto ip = std::get_if<std::string>(&args[0])) {
+        // Simple IPv4 validation
+        std::regex ipv4_pattern(R"(^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$)");
+        std::smatch matches;
+        if (std::regex_match(*ip, matches, ipv4_pattern)) {
+            for (size_t i = 1; i <= 4; ++i) {
+                int octet = std::stoi(matches[i].str());
+                if (octet < 0 || octet > 255) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+static Value nativeNetIsIpv6(const std::vector<Value> &args) {
+    if (auto ip = std::get_if<std::string>(&args[0])) {
+        // Basic IPv6 validation
+        std::regex ipv6_pattern(R"(^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:)*::([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$)");
+        return std::regex_match(*ip, ipv6_pattern);
+    }
+    return false;
+}
+
+static Value nativeNetIpv4ToInt(const std::vector<Value> &args) {
+    if (auto ip = std::get_if<std::string>(&args[0])) {
+        std::istringstream iss(*ip);
+        std::string octet;
+        unsigned long result = 0;
+        int shift = 24;
+
+        while (std::getline(iss, octet, '.')) {
+            if (shift < 0) return std::monostate{};
+            int num = std::stoi(octet);
+            if (num < 0 || num > 255) return std::monostate{};
+            result |= (num << shift);
+            shift -= 8;
+        }
+
+        return static_cast<double>(result);
+    }
+    return std::monostate{};
+}
+
+static Value nativeNetIntToIpv4(const std::vector<Value> &args) {
+    if (auto num = std::get_if<double>(&args[0])) {
+        unsigned long ip = static_cast<unsigned long>(*num);
+        std::ostringstream oss;
+        oss << ((ip >> 24) & 255) << "."
+            << ((ip >> 16) & 255) << "."
+            << ((ip >> 8) & 255) << "."
+            << (ip & 255);
+        return oss.str();
+    }
+    return std::monostate{};
+}
+
+static Value nativeNetDnsLookup(const std::vector<Value> &args) {
+    // Placeholder - DNS lookup would require network libraries
+    if (auto hostname = std::get_if<std::string>(&args[0])) {
+        // For now, return a mock result
+        auto result = std::make_shared<LumaMap>();
+        auto addresses = std::make_shared<List>();
+        addresses->elements.push_back(std::string("127.0.0.1"));
+        result->values["addresses"] = addresses;
+        result->values["type"] = 1.0; // A record
+        result->values["error"] = std::monostate{};
+        return result;
+    }
+    return std::monostate{};
+}
+
+static Value nativeNetGetHostname(const std::vector<Value> &args) {
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) == 0) {
+        return std::string(hostname);
+    }
+    return std::string("localhost");
+}
+
+static Value nativeNetParseUrl(const std::vector<Value> &args) {
+    if (auto url = std::get_if<std::string>(&args[0])) {
+        auto result = std::make_shared<LumaMap>();
+
+        // Simple URL parsing
+        size_t colon_pos = url->find(':');
+        if (colon_pos != std::string::npos) {
+            result->values["protocol"] = url->substr(0, colon_pos);
+            std::string rest = url->substr(colon_pos + 1);
+
+            if (rest.substr(0, 2) == "//") {
+                rest = rest.substr(2);
+                size_t slash_pos = rest.find('/');
+                std::string host_port;
+                std::string path_query;
+
+                if (slash_pos != std::string::npos) {
+                    host_port = rest.substr(0, slash_pos);
+                    path_query = rest.substr(slash_pos);
+                } else {
+                    host_port = rest;
+                    path_query = "/";
+                }
+
+                size_t colon_pos2 = host_port.find(':');
+                if (colon_pos2 != std::string::npos) {
+                    result->values["hostname"] = host_port.substr(0, colon_pos2);
+                    result->values["port"] = std::stod(host_port.substr(colon_pos2 + 1));
+                } else {
+                    result->values["hostname"] = host_port;
+                    result->values["port"] = 80.0; // default
+                }
+
+                result->values["pathname"] = path_query;
+
+                size_t query_pos = path_query.find('?');
+                if (query_pos != std::string::npos) {
+                    result->values["pathname"] = path_query.substr(0, query_pos);
+                    result->values["search"] = path_query.substr(query_pos);
+                } else {
+                    result->values["search"] = std::string("");
+                }
+            }
+        }
+
+        return result;
+    }
+    return std::monostate{};
+}
+
+// Socket module natives
+static Value nativeSocketCreate(const std::vector<Value> &args) {
+    if (args.size() < 2) return std::monostate{};
+
+    auto family = std::get_if<double>(&args[0]);
+    auto type = std::get_if<double>(&args[1]);
+
+    if (!family || !type) return std::monostate{};
+
+    int sock_family = (*family == 2.0) ? AF_INET : AF_INET; // Default to IPv4
+    int sock_type = (*type == 1.0) ? SOCK_STREAM : SOCK_DGRAM; // TCP or UDP
+
+    int sockfd = socket(sock_family, sock_type, 0);
+    if (sockfd < 0) {
+        return std::monostate{};
+    }
+
+    return static_cast<double>(sockfd);
+}
+
+static Value nativeSocketBind(const std::vector<Value> &args) {
+    if (args.size() < 3) return false;
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto addr_val = std::get_if<std::string>(&args[1]);
+    auto port_val = std::get_if<double>(&args[2]);
+
+    if (!sockfd_val || !addr_val || !port_val) return false;
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    struct sockaddr_in server_addr;
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(static_cast<uint16_t>(*port_val));
+    server_addr.sin_addr.s_addr = inet_addr(addr_val->c_str());
+
+    if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static Value nativeSocketListen(const std::vector<Value> &args) {
+    if (args.size() < 2) return false;
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto backlog_val = std::get_if<double>(&args[1]);
+
+    if (!sockfd_val || !backlog_val) return false;
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    int backlog = static_cast<int>(*backlog_val);
+
+    if (listen(sockfd, backlog) < 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static Value nativeSocketAccept(const std::vector<Value> &args) {
+    if (args.size() < 1) return std::monostate{};
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    if (!sockfd_val) return std::monostate{};
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    int client_fd = accept(sockfd, (struct sockaddr*)&client_addr, &client_len);
+    if (client_fd < 0) {
+        return std::monostate{};
+    }
+
+    auto result = std::make_shared<LumaMap>();
+    result->values["fd"] = static_cast<double>(client_fd);
+    result->values["address"] = std::string(inet_ntoa(client_addr.sin_addr));
+    result->values["port"] = static_cast<double>(ntohs(client_addr.sin_port));
+
+    return result;
+}
+
+static Value nativeSocketConnect(const std::vector<Value> &args) {
+    if (args.size() < 3) return false;
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto addr_val = std::get_if<std::string>(&args[1]);
+    auto port_val = std::get_if<double>(&args[2]);
+
+    if (!sockfd_val || !addr_val || !port_val) return false;
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    struct sockaddr_in server_addr;
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(static_cast<uint16_t>(*port_val));
+
+    if (inet_pton(AF_INET, addr_val->c_str(), &server_addr.sin_addr) <= 0) {
+        return false;
+    }
+
+    if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static Value nativeSocketSend(const std::vector<Value> &args) {
+    if (args.size() < 2) return std::monostate{};
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto data_val = std::get_if<std::string>(&args[1]);
+
+    if (!sockfd_val || !data_val) return std::monostate{};
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    ssize_t sent = send(sockfd, data_val->c_str(), data_val->length(), 0);
+
+    if (sent < 0) {
+        return std::monostate{};
+    }
+
+    return static_cast<double>(sent);
+}
+
+static Value nativeSocketRecv(const std::vector<Value> &args) {
+    if (args.size() < 2) return std::monostate{};
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto max_bytes_val = std::get_if<double>(&args[1]);
+
+    if (!sockfd_val || !max_bytes_val) return std::monostate{};
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    size_t max_bytes = static_cast<size_t>(*max_bytes_val);
+
+    std::vector<char> buffer(max_bytes);
+    ssize_t received = recv(sockfd, buffer.data(), max_bytes, 0);
+
+    if (received < 0) {
+        return std::monostate{};
+    }
+
+    return std::string(buffer.data(), received);
+}
+
+static Value nativeSocketSendTo(const std::vector<Value> &args) {
+    if (args.size() < 4) return std::monostate{};
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto data_val = std::get_if<std::string>(&args[1]);
+    auto addr_val = std::get_if<std::string>(&args[2]);
+    auto port_val = std::get_if<double>(&args[3]);
+
+    if (!sockfd_val || !data_val || !addr_val || !port_val) return std::monostate{};
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    struct sockaddr_in dest_addr;
+
+    memset(&dest_addr, 0, sizeof(dest_addr));
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(static_cast<uint16_t>(*port_val));
+
+    if (inet_pton(AF_INET, addr_val->c_str(), &dest_addr.sin_addr) <= 0) {
+        return std::monostate{};
+    }
+
+    ssize_t sent = sendto(sockfd, data_val->c_str(), data_val->length(), 0,
+                         (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
+    if (sent < 0) {
+        return std::monostate{};
+    }
+
+    return static_cast<double>(sent);
+}
+
+static Value nativeSocketRecvFrom(const std::vector<Value> &args) {
+    if (args.size() < 2) return std::monostate{};
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    auto max_bytes_val = std::get_if<double>(&args[1]);
+
+    if (!sockfd_val || !max_bytes_val) return std::monostate{};
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    size_t max_bytes = static_cast<size_t>(*max_bytes_val);
+
+    std::vector<char> buffer(max_bytes);
+    struct sockaddr_in src_addr;
+    socklen_t src_len = sizeof(src_addr);
+
+    ssize_t received = recvfrom(sockfd, buffer.data(), max_bytes, 0,
+                               (struct sockaddr*)&src_addr, &src_len);
+
+    if (received < 0) {
+        return std::monostate{};
+    }
+
+    auto result = std::make_shared<LumaMap>();
+    result->values["data"] = std::string(buffer.data(), received);
+    result->values["address"] = std::string(inet_ntoa(src_addr.sin_addr));
+    result->values["port"] = static_cast<double>(ntohs(src_addr.sin_port));
+
+    return result;
+}
+
+static Value nativeSocketClose(const std::vector<Value> &args) {
+    if (args.size() < 1) return false;
+
+    auto sockfd_val = std::get_if<double>(&args[0]);
+    if (!sockfd_val) return false;
+
+    int sockfd = static_cast<int>(*sockfd_val);
+    close(sockfd);
+    return true;
+}
+
+static Value nativeSocketSetOption(const std::vector<Value> &args) {
+    // Placeholder implementation
+    return true;
+}
+
+static Value nativeSocketGetOption(const std::vector<Value> &args) {
+    // Placeholder implementation
     return std::monostate{};
 }
 
@@ -2301,6 +2725,29 @@ void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr export
       defineNative("parse_query", nativeUrlParseQuery, 1);
       defineNative("build_query", nativeUrlBuildQuery, 1);
       defineNative("resolve", nativeUrlResolve, 2);
+  } else if (moduleId == "@std.async") {
+      defineNative("sleep", nativeAsyncSleep, 1);
+  } else if (moduleId == "@std.net") {
+      defineNative("is_ipv4", nativeNetIsIpv4, 1);
+      defineNative("is_ipv6", nativeNetIsIpv6, 1);
+      defineNative("ipv4_to_int", nativeNetIpv4ToInt, 1);
+      defineNative("int_to_ipv4", nativeNetIntToIpv4, 1);
+      defineNative("dns_lookup", nativeNetDnsLookup, 1);
+      defineNative("get_hostname", nativeNetGetHostname, 0);
+      defineNative("parse_url", nativeNetParseUrl, 1);
+  } else if (moduleId == "@std.socket") {
+      defineNative("create", nativeSocketCreate, 2);
+      defineNative("bind", nativeSocketBind, 3);
+      defineNative("listen", nativeSocketListen, 2);
+      defineNative("accept", nativeSocketAccept, 1);
+      defineNative("connect", nativeSocketConnect, 3);
+      defineNative("send", nativeSocketSend, 2);
+      defineNative("recv", nativeSocketRecv, 2);
+      defineNative("sendto", nativeSocketSendTo, 4);
+      defineNative("recvfrom", nativeSocketRecvFrom, 2);
+      defineNative("close", nativeSocketClose, 1);
+      defineNative("set_option", nativeSocketSetOption, 3);
+      defineNative("get_option", nativeSocketGetOption, 2);
   }
 }
 

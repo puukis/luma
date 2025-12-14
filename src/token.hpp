@@ -20,6 +20,12 @@ enum class TokenType {
   Star,
   Slash,
 
+  // Bitwise operators
+  Ampersand,    // &
+  Pipe,         // |
+  ShiftLeft,    // <<
+  ShiftRight,   // >>
+
   // One or two character tokens
   Bang,
   BangEqual,
@@ -100,6 +106,14 @@ inline const char *tokenTypeName(TokenType t) {
     return "Star";
   case TokenType::Slash:
     return "Slash";
+  case TokenType::Ampersand:
+    return "Ampersand";
+  case TokenType::Pipe:
+    return "Pipe";
+  case TokenType::ShiftLeft:
+    return "ShiftLeft";
+  case TokenType::ShiftRight:
+    return "ShiftRight";
   case TokenType::Bang:
     return "Bang";
   case TokenType::BangEqual:

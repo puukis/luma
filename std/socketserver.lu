@@ -1,0 +1,545 @@
+module @std.socketserver
+
+use @std.socket as socket
+use @std.async as async
+use @std.buffer as buffer
+
+// Standard SocketServer module for Luma
+// High-level socket server utilities
+
+// Base Server class
+open class BaseServer {
+  def init(host, port, handler_class) {
+    this.host = host
+    if (this.host == nil) {
+      this.host = "127.0.0.1"
+    }
+    this.port = port
+    if (this.port == nil) {
+      this.port = 8000
+    }
+    this.handler_class = handler_class
+    this.running = false
+    this.server_socket = nil
+    this.clients = []
+  }
+
+  def start() {
+    if (this.running) {
+      return async.Promise.reject("Server already running")
+    }
+
+    return async.Promise(lambda(resolve, reject) {
+      this.server_socket = socket.create_server(this.host, this.port, 5)
+      if (this.server_socket == nil) {
+        reject("Failed to create server socket")
+        return
+      }
+
+      this.running = true
+      resolve(true)
+
+      // Start accepting connections
+      this._accept_loop()
+    })
+  }
+
+  def stop() {
+    if (!this.running) {
+      return
+    }
+
+    this.running = false
+
+    // Close all client connections
+    i = 0
+    until (i >= len(this.clients)) {
+      if (this.clients[i] != nil) {
+        this.clients[i].close()
+      }
+      i = i + 1
+    }
+    this.clients = []
+
+    // Close server socket
+    if (this.server_socket != nil) {
+      this.server_socket.close()
+      this.server_socket = nil
+    }
+  }
+
+  def is_running() {
+    return this.running
+  }
+
+  def get_host() {
+    return this.host
+  }
+
+  def get_port() {
+    return this.port
+  }
+
+  def get_client_count() {
+    return len(this.clients)
+  }
+
+  def _accept_loop() {
+    if (!this.running) {
+      return
+    }
+
+    this.server_socket.accept().then(
+      lambda(client_socket) {
+        if (client_socket != nil) {
+          this._handle_client(client_socket)
+        }
+
+        // Continue accepting
+        if (this.running) {
+          this._accept_loop()
+        }
+      },
+      lambda(error) {
+        // Log error but continue if still running
+        if (this.running) {
+          async.set_timeout(lambda() { this._accept_loop() }, 100)
+        }
+      }
+    )
+  }
+
+  def _handle_client(client_socket) {
+    push(this.clients, client_socket)
+
+    handler = this.handler_class(client_socket, this)
+    handler.handle().then(
+      lambda() {
+        // Remove client from list
+        this._remove_client(client_socket)
+        client_socket.close()
+      },
+      lambda(error) {
+        // Log error and remove client
+        this._remove_client(client_socket)
+        client_socket.close()
+      }
+    )
+  }
+
+  def _remove_client(client_socket) {
+    new_clients = []
+    i = 0
+    until (i >= len(this.clients)) {
+      if (this.clients[i] != client_socket) {
+        push(new_clients, this.clients[i])
+      }
+      i = i + 1
+    }
+    this.clients = new_clients
+  }
+}
+
+// Base Request Handler class
+open class BaseRequestHandler {
+  def init(client_socket, server) {
+    this.client_socket = client_socket
+    this.server = server
+    this.timeout = 30000  // 30 seconds
+  }
+
+  def handle() {
+    // Override in subclasses
+    return async.Promise.resolve()
+  }
+
+  def finish() {
+    // Called after handle() completes
+    return async.Promise.resolve()
+  }
+
+  def send(data) {
+    return this.client_socket.send_all(data)
+  }
+
+  def recv(max_bytes) {
+    return this.client_socket.recv(max_bytes)
+  }
+
+  def send_line(line) {
+    return this.send(line + "\r\n")
+  }
+
+  def recv_line() {
+    return async.Promise(lambda(resolve, reject) {
+      buffer = ""
+
+      recv_char = lambda() {
+        this.recv(1).then(
+          lambda(char) {
+            if (len(char) == 0) {
+              // Connection closed
+              resolve(buffer)
+            } else if (char == "\n") {
+              // End of line
+              if (len(buffer) > 0 and buffer[len(buffer) - 1] == "\r") {
+                buffer = buffer.slice(0, len(buffer) - 1)
+              }
+              resolve(buffer)
+            } else {
+              buffer = buffer + char
+              recv_char()
+            }
+          },
+          reject
+        )
+      }
+
+      recv_char()
+    })
+  }
+
+  def get_client_address() {
+    return this.client_socket.get_remote_address()
+  }
+
+  def get_server() {
+    return this.server
+  }
+
+  def set_timeout(timeout_ms) {
+    this.timeout = timeout_ms
+  }
+
+  def get_timeout() {
+    return this.timeout
+  }
+}
+
+// TCP Server class
+open class TCPServer {
+  def init(host, port, request_handler_class) {
+    this.base_server = BaseServer(host, port, request_handler_class)
+  }
+
+  def start() {
+    return this.base_server.start()
+  }
+
+  def stop() {
+    this.base_server.stop()
+  }
+
+  def is_running() {
+    return this.base_server.is_running()
+  }
+
+  def get_host() {
+    return this.base_server.get_host()
+  }
+
+  def get_port() {
+    return this.base_server.get_port()
+  }
+
+  def get_client_count() {
+    return this.base_server.get_client_count()
+  }
+}
+
+// Echo Server Handler
+open class EchoHandler {
+  def init(client_socket, server) {
+    this.base_handler = BaseRequestHandler(client_socket, server)
+  }
+
+  def handle() {
+    return async.Promise(lambda(resolve, reject) {
+      this.base_handler.send("Echo Server - Type 'quit' to exit\r\n").then(
+        lambda() { this._echo_loop(resolve, reject) },
+        reject
+      )
+    })
+  }
+
+  def _echo_loop(resolve, reject) {
+    this.base_handler.recv_line().then(
+      lambda(line) {
+        if (line == "quit") {
+          this.base_handler.send_line("Goodbye!")
+          resolve()
+        } else {
+          this.base_handler.send_line("Echo: " + line).then(
+            lambda() { this._echo_loop(resolve, reject) },
+            reject
+          )
+        }
+      },
+      reject
+    )
+  }
+}
+
+// HTTP Server Handler
+open class HTTPHandler {
+  def init(client_socket, server) {
+    this.base_handler = BaseRequestHandler(client_socket, server)
+  }
+
+  def handle() {
+    return this.base_handler.recv_line().then(
+      lambda(request_line) {
+        return this._parse_request(request_line)
+      }
+    ).then(
+      lambda(request) {
+        return this._handle_request(request)
+      }
+    )
+  }
+
+  def _parse_request(request_line) {
+    // Simple HTTP request parsing
+    parts = []
+    current = ""
+    i = 0
+    until (i >= len(request_line)) {
+      char = request_line[i]
+      if (char == " ") {
+        if (len(current) > 0) {
+          push(parts, current)
+          current = ""
+        }
+      } else {
+        current = current + char
+      }
+      i = i + 1
+    }
+    if (len(current) > 0) {
+      push(parts, current)
+    }
+
+    if (len(parts) < 3) {
+      return { "method": "GET", "path": "/", "version": "HTTP/1.1" }
+    }
+
+    return {
+      "method": parts[0],
+      "path": parts[1],
+      "version": parts[2]
+    }
+  }
+
+  def _handle_request(request) {
+    response_body = "Hello from Luma HTTP Server!\r\n"
+    response_body = response_body + "Method: " + request["method"] + "\r\n"
+    response_body = response_body + "Path: " + request["path"] + "\r\n"
+    response_body = response_body + "Version: " + request["version"] + "\r\n"
+
+    response = "HTTP/1.1 200 OK\r\n"
+    response = response + "Content-Type: text/plain\r\n"
+    response = response + "Content-Length: " + len(response_body) + "\r\n"
+    response = response + "\r\n"
+    response = response + response_body
+
+    return this.base_handler.send(response)
+  }
+}
+
+// UDP Server class
+open class UDPServer {
+  def init(host, port, request_handler_class) {
+    this.host = host
+    if (this.host == nil) {
+      this.host = "127.0.0.1"
+    }
+    this.port = port
+    if (this.port == nil) {
+      this.port = 8000
+    }
+    this.handler_class = request_handler_class
+    this.running = false
+    this.server_socket = nil
+  }
+
+  def start() {
+    if (this.running) {
+      return async.Promise.reject("Server already running")
+    }
+
+    return async.Promise(lambda(resolve, reject) {
+      this.server_socket = socket.udp_socket()
+      if (!this.server_socket.create()) {
+        reject("Failed to create UDP socket")
+        return
+      }
+
+      if (!this.server_socket.bind(this.host, this.port)) {
+        reject("Failed to bind UDP socket")
+        return
+      }
+
+      this.running = true
+      resolve(true)
+
+      // Start receiving datagrams
+      this._recv_loop()
+    })
+  }
+
+  def stop() {
+    if (!this.running) {
+      return
+    }
+
+    this.running = false
+
+    if (this.server_socket != nil) {
+      this.server_socket.close()
+      this.server_socket = nil
+    }
+  }
+
+  def is_running() {
+    return this.running
+  }
+
+  def get_host() {
+    return this.host
+  }
+
+  def get_port() {
+    return this.port
+  }
+
+  def _recv_loop() {
+    if (!this.running) {
+      return
+    }
+
+    this.server_socket.recvfrom(4096).then(
+      lambda(result) {
+        if (result != nil) {
+          this._handle_datagram(result["data"], result["address"], result["port"])
+        }
+
+        // Continue receiving
+        if (this.running) {
+          this._recv_loop()
+        }
+      },
+      lambda(error) {
+        // Log error but continue if still running
+        if (this.running) {
+          async.set_timeout(lambda() { this._recv_loop() }, 100)
+        }
+      }
+    )
+  }
+
+  def _handle_datagram(data, address, port) {
+    handler = this.handler_class(data, address, port, this)
+    handler.handle().then(
+      lambda(response) {
+        if (response != nil) {
+          this.server_socket.sendto(response, address, port)
+        }
+      },
+      lambda(error) {
+        // Log error
+      }
+    )
+  }
+}
+
+// UDP Request Handler base class
+open class BaseUDPHandler {
+  def init(data, address, port, server) {
+    this.data = data
+    this.address = address
+    this.port = port
+    this.server = server
+  }
+
+  def handle() {
+    // Override in subclasses
+    return async.Promise.resolve(nil)
+  }
+
+  def get_data() {
+    return this.data
+  }
+
+  def get_address() {
+    return this.address
+  }
+
+  def get_port() {
+    return this.port
+  }
+
+  def get_server() {
+    return this.server
+  }
+}
+
+// Echo UDP Handler
+open class EchoUDPHandler {
+  def init(data, address, port, server) {
+    this.base_handler = BaseUDPHandler(data, address, port, server)
+  }
+
+  def handle() {
+    // Echo the data back
+    return async.Promise.resolve("Echo: " + this.base_handler.get_data())
+  }
+}
+
+// Simple server factory functions
+
+open def echo_server(host, port) {
+  return TCPServer(host, port, EchoHandler)
+}
+
+open def http_server(host, port) {
+  return TCPServer(host, port, HTTPHandler)
+}
+
+open def echo_udp_server(host, port) {
+  return UDPServer(host, port, EchoUDPHandler)
+}
+
+// Threading server (simplified - no actual threading in Luma yet)
+open class ThreadingTCPServer {
+  def init(host, port, request_handler_class) {
+    this.tcp_server = TCPServer(host, port, request_handler_class)
+  }
+
+  def start() {
+    return this.tcp_server.start()
+  }
+
+  def stop() {
+    this.tcp_server.stop()
+  }
+
+  def is_running() {
+    return this.tcp_server.is_running()
+  }
+
+  def get_host() {
+    return this.tcp_server.get_host()
+  }
+
+  def get_port() {
+    return this.tcp_server.get_port()
+  }
+
+  def get_client_count() {
+    return this.tcp_server.get_client_count()
+  }
+}
+
+open def threading_tcp_server(host, port, request_handler_class) {
+  return ThreadingTCPServer(host, port, request_handler_class)
+}

@@ -1,0 +1,22 @@
+// Simple bitwise test
+use @std.io as io
+
+io.println("Testing bitwise operations:")
+
+a = 255 & 15
+io.println("255 & 15 =")
+io.println(a)
+
+b = 10 | 5
+io.println("10 | 5 =")
+io.println(b)
+
+c = 1 << 8
+io.println("1 << 8 =")
+io.println(c)
+
+d = 256 >> 4
+io.println("256 >> 4 =")
+io.println(d)
+
+io.println("Bitwise test complete!")

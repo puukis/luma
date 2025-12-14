@@ -1,0 +1,5 @@
+// Simple test
+use @std.io as io
+
+io.println("Hello World")
+io.println("Test completed")
