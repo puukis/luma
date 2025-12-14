@@ -1,6 +1,7 @@
 #include "interpreter.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -1115,6 +1116,40 @@ static Value nativeJsonParse(const std::vector<Value> &args) {
   return std::monostate{};
 }
 
+// ========== Math Natives ==========
+static Value nativeMathSqrt(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::sqrt(*x);
+    return std::monostate{};
+}
+static Value nativeMathSin(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::sin(*x);
+    return std::monostate{};
+}
+static Value nativeMathCos(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::cos(*x);
+    return std::monostate{};
+}
+static Value nativeMathTan(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::tan(*x);
+    return std::monostate{};
+}
+static Value nativeMathAbs(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::abs(*x);
+    return std::monostate{};
+}
+static Value nativeMathCeil(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::ceil(*x);
+    return std::monostate{};
+}
+static Value nativeMathFloor(const std::vector<Value> &args) {
+    if (auto x = std::get_if<double>(&args[0])) return std::floor(*x);
+    return std::monostate{};
+}
+static Value nativeMathPi(const std::vector<Value> &args) {
+    return 3.141592653589793;
+}
+
+
 void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr exports) {
   auto defineNative = [&](const std::string &name, std::function<Value(const std::vector<Value>&)> func, size_t arity) {
       auto native = std::make_shared<NativeFunctionObject>();
@@ -1139,6 +1174,15 @@ void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr export
   } else if (moduleId == "@std.io") {
       defineNative("input", nativeIoInput, 0);
       defineNative("ask", nativeIoAsk, 1);
+  } else if (moduleId == "@std.math") {
+      defineNative("sqrt", nativeMathSqrt, 1);
+      defineNative("sin", nativeMathSin, 1);
+      defineNative("cos", nativeMathCos, 1);
+      defineNative("tan", nativeMathTan, 1);
+      defineNative("abs", nativeMathAbs, 1);
+      defineNative("ceil", nativeMathCeil, 1);
+      defineNative("floor", nativeMathFloor, 1);
+      defineNative("pi", nativeMathPi, 0);
   }
 }
 

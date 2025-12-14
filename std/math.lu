@@ -1,0 +1,28 @@
+module @std.math
+
+// Standard Math module
+// Backend: Native C++ implementation
+
+// Returns the square root of a number.
+open def sqrt(x) { return 0 }
+
+// Returns the sine of a number (in radians).
+open def sin(x) { return 0 }
+
+// Returns the cosine of a number (in radians).
+open def cos(x) { return 0 }
+
+// Returns the tangent of a number (in radians).
+open def tan(x) { return 0 }
+
+// Returns the absolute value of a number.
+open def abs(x) { return 0 }
+
+// Returns the smallest integer greater than or equal to a number.
+open def ceil(x) { return 0 }
+
+// Returns the largest integer less than or equal to a number.
+open def floor(x) { return 0 }
+
+// The value of PI.
+open def pi() { return 3.141592653589793 }

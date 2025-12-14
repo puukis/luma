@@ -1,6 +1,6 @@
 Param(
     [string]$InstallDir = "$env:LOCALAPPDATA\Programs\Luma",
-    [string]$BinaryName = "lumac.exe",
+    [string]$BinaryName = "luma.exe",
     [string]$AliasName = "luma.exe"
 )
 
@@ -16,8 +16,45 @@ function Fail($Message) {
     exit 1
 }
 
+function Set-FileAssociation {
+    param(
+        [string]$InstallPath,
+        [string]$Binary
+    )
+    
+    Write-Info "Setting up file association for .lu files..."
+    $ExePath = Join-Path $InstallPath $Binary
+    $Command = "`"$ExePath`" -i `"%1`""
+
+    $RegPathExt = "Registry::HKEY_CLASSES_ROOT\.lu"
+    $RegPathFileType = "Registry::HKEY_CLASSES_ROOT\Luma.File"
+    $RegPathCommand = "Registry::HKEY_CLASSES_ROOT\Luma.File\shell\open\command"
+
+    try {
+        if (-not (Test-Path $RegPathExt)) {
+            New-Item -Path $RegPathExt -Force | Out-Null
+        }
+        New-ItemProperty -Path $RegPathExt -Name "(Default)" -Value "Luma.File" -Force | Out-Null
+
+        if (-not (Test-Path $RegPathFileType)) {
+            New-Item -Path $RegPathFileType -Force | Out-Null
+        }
+        New-ItemProperty -Path $RegPathFileType -Name "(Default)" -Value "Luma Script" -Force | Out-Null
+
+        if (-not (Test-Path $RegPathCommand)) {
+            New-Item -Path $RegPathCommand -Force | Out-Null
+        }
+        New-ItemProperty -Path $RegPathCommand -Name "(Default)" -Value $Command -Force | Out-Null
+
+        Write-Success "File association set. Double-clicking .lu files will now run with Luma."
+    }
+    catch {
+        Write-WarnMessage "Could not set file association. Please run this script as an administrator."
+    }
+}
+
 # Discover source directory (support remote install via curl/irm)
-$SourceDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+$SourceDir = if ($PSScriptRoot) { (Get-Item $PSScriptRoot).Parent.FullName } else { (Get-Location).Path }
 $TempDir = $null
 
 # Dependency checks
@@ -77,8 +114,8 @@ catch {
 }
 
 # Determine binary path (single-config or multi-config generators)
-$BinaryPath = Join-Path $BuildDir "lumac.exe"
-$ReleaseBinary = Join-Path $BuildDir (Join-Path "Release" "lumac.exe")
+$BinaryPath = Join-Path $BuildDir "luma.exe"
+$ReleaseBinary = Join-Path $BuildDir (Join-Path "Release" "luma.exe")
 if (Test-Path $ReleaseBinary) { $BinaryPath = $ReleaseBinary }
 
 Pop-Location
@@ -90,6 +127,10 @@ if (-not (Test-Path $BinaryPath)) {
 
 Write-Success "Build successful!"
 
+
+# Stop running process to prevent copy error
+Write-Info "Checking for running Luma processes..."
+Get-Process luma -ErrorAction SilentlyContinue | Stop-Process -Force
 
 # Install
 Write-Info "Installing to $InstallDir..."
@@ -118,6 +159,9 @@ if ($AliasPath -ne $Destination) {
 }
 
 Write-Success "Installed $BinaryName to $InstallDir"
+
+# Set File Association
+Set-FileAssociation -InstallPath $InstallDir -Binary $BinaryName
 
 # PATH configuration
 $pathEntries = ($env:PATH -split ';') | Where-Object { $_ }

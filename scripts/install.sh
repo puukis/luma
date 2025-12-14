@@ -2,9 +2,9 @@
 
 # Configuration
 INSTALL_DIR="$HOME/.local/bin"
-BINARY_NAME="lumac"
+BINARY_NAME="luma"
 ALIAS_NAME="luma"
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$SOURCE_DIR/build"
 
 # Colors for logging
@@ -100,8 +100,8 @@ if ! make; then
     fail "Compilation failed."
 fi
 
-if [ ! -f "$BINARY_NAME" ]; then
-    fail "Build completed but binary '$BINARY_NAME' was not found."
+if [ ! -f "$BUILD_DIR/$BINARY_NAME" ]; then
+    fail "Build completed but binary '$BINARY_NAME' was not found in '$BUILD_DIR'."
 fi
 
 log_success "Build successful!"
