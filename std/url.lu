@@ -1,0 +1,129 @@
+module @std.url
+
+use @std.encoding as encoding
+
+// Standard URL module for Luma
+// URL parsing, construction, and manipulation
+
+// Parse a URL string into components
+// native def parse(url_str)
+open def parse(url_str) {
+  return {
+    "href": url_str,
+    "protocol": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "",
+    "search": "",
+    "hash": ""
+  }
+}
+
+// Construct a URL from components
+// native def format(url_obj)
+open def format(url_obj) {
+  result = ""
+  if (url_obj["protocol"] != nil and url_obj["protocol"] != "") {
+    result = result + url_obj["protocol"]
+    if (!ends_with(result, "://")) {
+      result = result + "://"
+    }
+  }
+  if (url_obj["hostname"] != nil) {
+    result = result + url_obj["hostname"]
+  }
+  if (url_obj["port"] != nil and url_obj["port"] != "") {
+    result = result + ":" + url_obj["port"]
+  }
+  if (url_obj["pathname"] != nil) {
+    result = result + url_obj["pathname"]
+  }
+  if (url_obj["search"] != nil and url_obj["search"] != "") {
+    if (!starts_with(url_obj["search"], "?")) {
+      result = result + "?"
+    }
+    result = result + url_obj["search"]
+  }
+  if (url_obj["hash"] != nil and url_obj["hash"] != "") {
+    if (!starts_with(url_obj["hash"], "#")) {
+      result = result + "#"
+    }
+    result = result + url_obj["hash"]
+  }
+  return result
+}
+
+// Parse query string into key-value pairs
+// native def parse_query(query_str)
+open def parse_query(query_str) {
+  // Native implementation will handle the complex parsing
+  return {}
+}
+
+// Build query string from key-value pairs
+// native def build_query(params)
+open def build_query(params) {
+  if (params == nil) {
+    return ""
+  }
+
+  result = ""
+  first = true
+  keys = keys(params)
+  i = 0
+  until (i >= len(keys)) {
+    key = keys[i]
+    value = params[key]
+    if (!first) {
+      result = result + "&"
+    }
+    encoded_key = encoding.url_encode(key)
+    encoded_value = encoding.url_encode(value)
+    result = result + encoded_key + "=" + encoded_value
+    first = false
+    i = i + 1
+  }
+
+  if (result != "") {
+    result = "?" + result
+  }
+  return result
+}
+
+// Resolve a relative URL against a base URL
+// native def resolve(from, to)
+open def resolve(from, to) {
+  // Simple implementation - just return 'to' if it's absolute, otherwise combine
+  if (starts_with(to, "http://") or starts_with(to, "https://")) {
+    return to
+  }
+  return from + "/" + to
+}
+
+// Extract domain from URL
+open def domain(url_str) {
+  parsed = parse(url_str)
+  return parsed["hostname"]
+}
+
+// Check if URL is absolute
+open def is_absolute(url_str) {
+  return starts_with(url_str, "http://") or starts_with(url_str, "https://") or
+         starts_with(url_str, "ftp://") or starts_with(url_str, "file://")
+}
+
+// Get URL without query parameters or hash
+open def pathname(url_str) {
+  parsed = parse(url_str)
+  return parsed["pathname"]
+}
+
+// URL encoding/decoding (convenience functions)
+// These delegate to encoding module
+open def encode(str) {
+  return encoding.url_encode(str)
+}
+
+open def decode(str) {
+  return encoding.url_decode(str)
+}

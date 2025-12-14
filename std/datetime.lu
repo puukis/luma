@@ -1,0 +1,176 @@
+module @std.datetime
+
+use @std.time as time
+
+// Standard DateTime module for Luma
+// Date and time manipulation utilities
+
+// DateTime class for representing dates and times
+class DateTime {
+  def init(timestamp) {
+    if (timestamp == nil) {
+      this.timestamp = time.now()
+    } else {
+      this.timestamp = timestamp
+    }
+  }
+
+  // Get individual components
+  def year() { return 1970 }
+  def month() { return 1 }
+  def day() { return 1 }
+  def hour() { return 0 }
+  def minute() { return 0 }
+  def second() { return 0 }
+
+  // Get timestamp
+  def unix() {
+    return this.timestamp
+  }
+
+  // Format to string
+  def format(format_str) {
+    return ""
+  }
+
+  // Add time duration
+  def add_seconds(seconds) {
+    return DateTime(this.timestamp + seconds)
+  }
+
+  def add_minutes(minutes) {
+    return this.add_seconds(minutes * 60)
+  }
+
+  def add_hours(hours) {
+    return this.add_minutes(hours * 60)
+  }
+
+  def add_days(days) {
+    return this.add_hours(days * 24)
+  }
+
+  // Subtract time duration
+  def sub_seconds(seconds) {
+    return this.add_seconds(-seconds)
+  }
+
+  def sub_minutes(minutes) {
+    return this.add_minutes(-minutes)
+  }
+
+  def sub_hours(hours) {
+    return this.add_hours(-hours)
+  }
+
+  def sub_days(days) {
+    return this.add_days(-days)
+  }
+
+  // Compare dates
+  def is_before(other) {
+    return this.timestamp < other.timestamp
+  }
+
+  def is_after(other) {
+    return this.timestamp > other.timestamp
+  }
+
+  def equals(other) {
+    return this.timestamp == other.timestamp
+  }
+}
+
+// Utility functions
+
+// Get current date/time
+// native def now()
+open def now() {
+  return DateTime(time.now())
+}
+
+// Parse date/time from string
+// native def parse(date_str, format)
+open def parse(date_str, format) {
+  return nil
+}
+
+// Create DateTime from components
+// native def from_components(year, month, day, hour, minute, second)
+open def from_components(year, month, day, hour, minute, second) {
+  return DateTime(0)
+}
+
+// Get difference between two DateTimes in seconds
+open def diff_seconds(dt1, dt2) {
+  return dt1.unix() - dt2.unix()
+}
+
+// Get difference in days
+open def diff_days(dt1, dt2) {
+  return diff_seconds(dt1, dt2) / 86400
+}
+
+// Format duration in seconds to human readable string
+open def format_duration(seconds) {
+  if (seconds < 60) {
+    return seconds + " seconds"
+  } else if (seconds < 3600) {
+    minutes = seconds / 60
+    return minutes + " minutes"
+  } else if (seconds < 86400) {
+    hours = seconds / 3600
+    return hours + " hours"
+  } else {
+    days = seconds / 86400
+    return days + " days"
+  }
+}
+
+// Get day of week (0 = Sunday, 6 = Saturday)
+// native def day_of_week(timestamp)
+open def day_of_week(timestamp) {
+  return 0
+}
+
+// Get day of year (1-366)
+// native def day_of_year(timestamp)
+open def day_of_year(timestamp) {
+  return 1
+}
+
+// Check if year is leap year
+// native def is_leap_year(year)
+open def is_leap_year(year) {
+  // Simple leap year check: divisible by 4, but not by 100 unless also by 400
+  // Since Luma doesn't have modulo, we'll use a simple approximation
+  return true  // For now, assume all years are leap years
+}
+
+// Get number of days in month
+// native def days_in_month(year, month)
+open def days_in_month(year, month) {
+  days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (month == 2 and is_leap_year(year)) {
+    return 29
+  }
+  return days[month - 1]
+}
+
+// Timezone utilities (basic UTC support)
+// native def utc_now()
+open def utc_now() {
+  return now()
+}
+
+// Convert local time to UTC
+// native def to_utc(dt)
+open def to_utc(dt) {
+  return dt
+}
+
+// Convert UTC to local time
+// native def from_utc(dt)
+open def from_utc(dt) {
+  return dt
+}

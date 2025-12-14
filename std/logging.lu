@@ -1,0 +1,210 @@
+module @std.logging
+
+use @std.io as io
+use @std.datetime as datetime
+
+// Standard Logging module for Luma
+// Logging utilities with configurable levels and formatters
+
+// Log levels
+open def DEBUG() { return 0 }
+open def INFO() { return 1 }
+open def WARN() { return 2 }
+open def ERROR() { return 3 }
+open def FATAL() { return 4 }
+
+// Default log level
+open def _default_level() {
+  return INFO()
+}
+
+// Logger class
+class Logger {
+  def init(name) {
+    this.name = name
+    this.level = _default_level()
+    this.formatter = nil
+  }
+
+  def set_level(level) {
+    this.level = level
+  }
+
+  def get_level() {
+    return this.level
+  }
+
+  def set_formatter(formatter) {
+    this.formatter = formatter
+  }
+
+  def debug(message) {
+    this.log(DEBUG(), message)
+  }
+
+  def info(message) {
+    this.log(INFO(), message)
+  }
+
+  def warn(message) {
+    this.log(WARN(), message)
+  }
+
+  def error(message) {
+    this.log(ERROR(), message)
+  }
+
+  def fatal(message) {
+    this.log(FATAL(), message)
+  }
+
+  def log(level, message) {
+    if (level < this.level) {
+      return
+    }
+
+    formatted = this._format_message(level, message)
+    io.println(formatted)
+  }
+
+  def _format_message(level, message) {
+    if (this.formatter != nil) {
+      return this.formatter(level, message, this.name)
+    }
+
+    // Default formatter
+    level_name = this._level_name(level)
+    timestamp = "" + datetime.now().unix()
+    return "[" + timestamp + "] " + level_name + " " + this.name + ": " + message
+  }
+
+  def _level_name(level) {
+    if (level == DEBUG()) {
+      return "DEBUG"
+    } else if (level == INFO()) {
+      return "INFO"
+    } else if (level == WARN()) {
+      return "WARN"
+    } else if (level == ERROR()) {
+      return "ERROR"
+    } else if (level == FATAL()) {
+      return "FATAL"
+    } else {
+      return "UNKNOWN"
+    }
+  }
+}
+
+// Global logger registry
+open def _loggers() {
+  if (_loggers._instance == nil) {
+    _loggers._instance = {}
+  }
+  return _loggers._instance
+}
+
+// Get or create a logger by name
+open def get_logger(name) {
+  loggers = _loggers()
+  if (loggers[name] == nil) {
+    loggers[name] = Logger(name)
+  }
+  return loggers[name]
+}
+
+// Convenience functions for default logger
+open def _default_logger() {
+  return get_logger("root")
+}
+
+open def debug(message) {
+  _default_logger().debug(message)
+}
+
+open def info(message) {
+  _default_logger().info(message)
+}
+
+open def warn(message) {
+  _default_logger().warn(message)
+}
+
+open def error(message) {
+  _default_logger().error(message)
+}
+
+open def fatal(message) {
+  _default_logger().fatal(message)
+}
+
+open def log(level, message) {
+  _default_logger().log(level, message)
+}
+
+// Set global log level
+open def set_level(level) {
+  _default_logger().set_level(level)
+}
+
+// Built-in formatters
+
+// Simple formatter: [LEVEL] message
+open def simple_formatter(level, message, name) {
+  level_names = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
+  level_name = level_names[level] != nil ? level_names[level] : "UNKNOWN"
+  return "[" + level_name + "] " + message
+}
+
+// Detailed formatter: timestamp [LEVEL] name: message
+open def detailed_formatter(level, message, name) {
+  level_names = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
+  level_name = level_names[level] != nil ? level_names[level] : "UNKNOWN"
+  timestamp = "" + datetime.now().unix()
+  return timestamp + " [" + level_name + "] " + name + ": " + message
+}
+
+// JSON formatter
+open def json_formatter(level, message, name) {
+  level_names = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
+  level_name = level_names[level] != nil ? level_names[level] : "UNKNOWN"
+  timestamp = datetime.now().unix()
+
+  return "{" +
+    "\"timestamp\":" + ("" + timestamp) + "," +
+    "\"level\":\"" + level_name + "\"," +
+    "\"name\":\"" + name + "\"," +
+    "\"message\":\"" + message + "\"" +
+    "}"
+}
+
+// Set formatter for default logger
+open def set_formatter(formatter) {
+  _default_logger().set_formatter(formatter)
+}
+
+// Configuration helpers
+open def configure(config) {
+  if (config["level"] != nil) {
+    set_level(config["level"])
+  }
+  if (config["formatter"] != nil) {
+    set_formatter(config["formatter"])
+  }
+  if (config["loggers"] != nil) {
+    loggers_config = config["loggers"]
+    logger_names = keys(loggers_config)
+    i = 0
+    until (i >= len(logger_names)) {
+      name = logger_names[i]
+      logger_config = loggers_config[name]
+      logger = get_logger(name)
+      if (logger_config["level"] != nil) {
+        logger.set_level(logger_config["level"])
+      }
+      if (logger_config["formatter"] != nil) {
+        logger.set_formatter(logger_config["formatter"])
+      }
+      i = i + 1
+    }
+  }
+}

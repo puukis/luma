@@ -1,0 +1,352 @@
+module @std.collections
+
+// Standard Collections module for Luma
+// Advanced data structures and utilities
+
+// Stack - LIFO (Last In, First Out) data structure
+open class Stack {
+  def init() {
+    this.items = []
+  }
+
+  def push(item) {
+    push(this.items, item)
+  }
+
+  def pop() {
+    if (len(this.items) == 0) {
+      return nil
+    }
+    return pop(this.items)
+  }
+
+  def peek() {
+    if (len(this.items) == 0) {
+      return nil
+    }
+    return this.items[len(this.items) - 1]
+  }
+
+  def is_empty() {
+    return len(this.items) == 0
+  }
+
+  def size() {
+    return len(this.items)
+  }
+
+  def clear() {
+    this.items = []
+  }
+}
+
+// Queue - FIFO (First In, First Out) data structure
+open class Queue {
+  def init() {
+    this.items = []
+  }
+
+  def enqueue(item) {
+    push(this.items, item)
+  }
+
+  def dequeue() {
+    if (len(this.items) == 0) {
+      return nil
+    }
+    value = this.items[0]
+    // Shift all elements left by one
+    new_items = []
+    i = 1
+    until (i >= len(this.items)) {
+      push(new_items, this.items[i])
+      i = i + 1
+    }
+    this.items = new_items
+    return value
+  }
+
+  def peek() {
+    if (len(this.items) == 0) {
+      return nil
+    }
+    return this.items[0]
+  }
+
+  def is_empty() {
+    return len(this.items) == 0
+  }
+
+  def size() {
+    return len(this.items)
+  }
+
+  def clear() {
+    this.items = []
+  }
+}
+
+// PriorityQueue - elements are dequeued based on priority
+open class PriorityQueue {
+  def init() {
+    this.items = []
+  }
+
+  def enqueue(item, priority) {
+    element = { "item": item, "priority": priority }
+    push(this.items, element)
+    // Simple bubble sort by priority (higher priority numbers = higher priority)
+    this._sort_by_priority()
+  }
+
+  def dequeue() {
+    if (len(this.items) == 0) {
+      return nil
+    }
+    return remove(this.items, 0)["item"]
+  }
+
+  def peek() {
+    if (len(this.items) == 0) {
+      return nil
+    }
+    return this.items[0]["item"]
+  }
+
+  def is_empty() {
+    return len(this.items) == 0
+  }
+
+  def size() {
+    return len(this.items)
+  }
+
+  def clear() {
+    this.items = []
+  }
+
+  // Helper method to sort by priority (highest first)
+  def _sort_by_priority() {
+    // Simple bubble sort implementation
+    i = 0
+    until (i >= len(this.items) - 1) {
+      j = 0
+      until (j >= len(this.items) - i - 1) {
+        if (this.items[j]["priority"] < this.items[j + 1]["priority"]) {
+          // Swap
+          temp = this.items[j]
+          this.items[j] = this.items[j + 1]
+          this.items[j + 1] = temp
+        }
+        j = j + 1
+      }
+      i = i + 1
+    }
+  }
+}
+
+// Set - collection of unique elements
+open class Set {
+  def init() {
+    this.items = {}
+  }
+
+  def add(item) {
+    // Use string representation as key for uniqueness
+    key = this._to_key(item)
+    this.items[key] = item
+  }
+
+  def remove(item) {
+    key = this._to_key(item)
+    if (this.items[key] != nil) {
+      removed = this.items[key]
+      this.items[key] = nil
+      return removed
+    }
+    return nil
+  }
+
+  def contains(item) {
+    key = this._to_key(item)
+    return this.items[key] != nil
+  }
+
+  def size() {
+    return len(keys(this.items))
+  }
+
+  def is_empty() {
+    return len(keys(this.items)) == 0
+  }
+
+  def clear() {
+    this.items = {}
+  }
+
+  def to_list() {
+    result = []
+    k = keys(this.items)
+    i = 0
+    until (i >= len(k)) {
+      if (this.items[k[i]] != nil) {
+        push(result, this.items[k[i]])
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  // Union with another set
+  def union(other) {
+    result = Set()
+    // Add all items from this set
+    k = keys(this.items)
+    i = 0
+    until (i >= len(k)) {
+      if (this.items[k[i]] != nil) {
+        result.add(this.items[k[i]])
+      }
+      i = i + 1
+    }
+    // Add all items from other set
+    other_list = other.to_list()
+    i = 0
+    until (i >= len(other_list)) {
+      result.add(other_list[i])
+      i = i + 1
+    }
+    return result
+  }
+
+  // Intersection with another set
+  def intersection(other) {
+    result = Set()
+    k = keys(this.items)
+    i = 0
+    until (i >= len(k)) {
+      if (this.items[k[i]] != nil) {
+        item = this.items[k[i]]
+        if (other.contains(item)) {
+          result.add(item)
+        }
+      }
+      i = i + 1
+    }
+    return result
+  }
+
+  // Helper to convert item to string key
+  def _to_key(item) {
+    if (item == nil) {
+      return "nil"
+    }
+    // For now, just use string representation
+    // In a real implementation, this would use proper hashing
+    return "" + item
+  }
+}
+
+// LinkedList - doubly linked list implementation
+open class LinkedList {
+  def init() {
+    this.head = nil
+    this.tail = nil
+    this._size = 0
+  }
+
+  def append(item) {
+    node = { "value": item, "next": nil, "prev": nil }
+    if (this._size == 0) {
+      this.head = node
+      this.tail = node
+    } else {
+      node["prev"] = this.tail
+      this.tail["next"] = node
+      this.tail = node
+    }
+    this._size = this._size + 1
+  }
+
+  def prepend(item) {
+    node = { "value": item, "next": nil, "prev": nil }
+    if (this._size == 0) {
+      this.head = node
+      this.tail = node
+    } else {
+      node["next"] = this.head
+      this.head["prev"] = node
+      this.head = node
+    }
+    this._size = this._size + 1
+  }
+
+  def remove_first() {
+    if (this._size == 0) {
+      return nil
+    }
+    value = this.head["value"]
+    if (this._size == 1) {
+      this.head = nil
+      this.tail = nil
+    } else {
+      this.head = this.head["next"]
+      this.head["prev"] = nil
+    }
+    this._size = this._size - 1
+    return value
+  }
+
+  def remove_last() {
+    if (this._size == 0) {
+      return nil
+    }
+    value = this.tail["value"]
+    if (this._size == 1) {
+      this.head = nil
+      this.tail = nil
+    } else {
+      this.tail = this.tail["prev"]
+      this.tail["next"] = nil
+    }
+    this._size = this._size - 1
+    return value
+  }
+
+  def get(index) {
+    if (index < 0 or index >= this._size) {
+      return nil
+    }
+    current = this.head
+    i = 0
+    until (i >= index) {
+      current = current["next"]
+      i = i + 1
+    }
+    return current["value"]
+  }
+
+  def size() {
+    return this._size
+  }
+
+  def is_empty() {
+    return this._size == 0
+  }
+
+  def clear() {
+    this.head = nil
+    this.tail = nil
+    this._size = 0
+  }
+
+  def to_list() {
+    result = []
+    current = this.head
+    until (current == nil) {
+      push(result, current["value"])
+      current = current["next"]
+    }
+    return result
+  }
+}

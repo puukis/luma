@@ -1,0 +1,77 @@
+module @std.path
+
+// Standard Path module for Luma
+// Cross-platform path manipulation utilities
+
+// Joins path segments using the appropriate separator
+// native def join(paths...)
+open def join(paths) {
+  // Fallback implementation - would be replaced by native
+  return ""
+}
+
+// Returns the directory name of a path
+// native def dirname(path)
+open def dirname(path) {
+  return ""
+}
+
+// Returns the base name (last component) of a path
+// native def basename(path)
+open def basename(path) {
+  return ""
+}
+
+// Returns the file extension of a path (including the dot)
+// native def extname(path)
+open def extname(path) {
+  return ""
+}
+
+// Returns the path without its file extension
+// native def stem(path)
+open def stem(path) {
+  return ""
+}
+
+// Normalizes a path by resolving . and .. segments
+// native def normalize(path)
+open def normalize(path) {
+  return path
+}
+
+// Converts a path to absolute path
+// native def absolute(path)
+open def absolute(path) {
+  return path
+}
+
+// Checks if a path is absolute
+// native def is_absolute(path)
+open def is_absolute(path) {
+  return false
+}
+
+// Returns the relative path from 'from' to 'to'
+// native def relative(from, to)
+open def relative(from, to) {
+  return ""
+}
+
+// Joins path segments and normalizes the result
+// native def resolve(paths...)
+open def resolve(paths) {
+  return ""
+}
+
+// Returns the appropriate path separator for the current platform
+// native def sep()
+open def sep() {
+  return "/"
+}
+
+// Returns the appropriate path delimiter for PATH environment variable
+// native def delimiter()
+open def delimiter() {
+  return ":"
+}

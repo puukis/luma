@@ -1,0 +1,92 @@
+module @std.uuid
+
+// Standard UUID module for Luma
+// Universally Unique Identifier generation and validation
+
+// Generate a random UUID v4
+// native def v4()
+open def v4() {
+  return "00000000-0000-0000-0000-000000000000"
+}
+
+// Generate a nil UUID (all zeros)
+// native def nil()
+open def nil() {
+  return "00000000-0000-0000-0000-000000000000"
+}
+
+// Validate if a string is a valid UUID
+// native def is_valid(uuid_str)
+open def is_valid(uuid_str) {
+  if (uuid_str == nil) {
+    return false
+  }
+
+  // Check basic format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  // This is a simplified validation
+  return len(uuid_str) == 36
+}
+
+// Parse UUID string into components
+// native def parse(uuid_str)
+open def parse(uuid_str) {
+  if (!is_valid(uuid_str)) {
+    return nil
+  }
+
+  // Split into components
+  // time_low (8 chars) - time_mid (4) - time_hi_and_version (4) - clock_seq_and_reserved (4) - node (12)
+  return {
+    "string": uuid_str,
+    "version": 4,  // Assume v4 for now
+    "variant": 1   // RFC 4122 variant
+  }
+}
+
+// Convert UUID to string (useful if we have UUID objects)
+// native def stringify(uuid)
+open def stringify(uuid) {
+  if (uuid == nil) {
+    return nil()
+  }
+  return uuid["string"]
+}
+
+// Compare two UUIDs for equality
+open def equals(uuid1, uuid2) {
+  if (uuid1 == nil or uuid2 == nil) {
+    return false
+  }
+  return stringify(uuid1) == stringify(uuid2)
+}
+
+// Generate UUID v3 (name-based with MD5)
+// native def v3(namespace, name)
+open def v3(namespace, name) {
+  // This would use MD5 hash of namespace + name
+  return v4()  // Fallback to v4
+}
+
+// Generate UUID v5 (name-based with SHA-1)
+// native def v5(namespace, name)
+open def v5(namespace, name) {
+  // This would use SHA-1 hash of namespace + name
+  return v4()  // Fallback to v4
+}
+
+// Predefined namespaces for v3/v5
+open def namespace_dns() {
+  return "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+}
+
+open def namespace_url() {
+  return "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
+}
+
+open def namespace_oid() {
+  return "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
+}
+
+open def namespace_x500() {
+  return "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
+}

@@ -14,6 +14,10 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <chrono>
+#include <thread>
+#include <unistd.h>
+#include <limits.h>
 
 namespace fs = std::filesystem;
 
@@ -23,6 +27,80 @@ static Value nativePush(const std::vector<Value> &args);
 static Value nativePop(const std::vector<Value> &args);
 static Value nativeKeys(const std::vector<Value> &args);
 static Value nativeRemove(const std::vector<Value> &args);
+
+// Path module natives
+static Value nativePathJoin(const std::vector<Value> &args);
+static Value nativePathDirname(const std::vector<Value> &args);
+static Value nativePathBasename(const std::vector<Value> &args);
+static Value nativePathExtname(const std::vector<Value> &args);
+static Value nativePathStem(const std::vector<Value> &args);
+static Value nativePathNormalize(const std::vector<Value> &args);
+static Value nativePathAbsolute(const std::vector<Value> &args);
+static Value nativePathIsAbsolute(const std::vector<Value> &args);
+static Value nativePathRelative(const std::vector<Value> &args);
+static Value nativePathResolve(const std::vector<Value> &args);
+static Value nativePathSep(const std::vector<Value> &args);
+static Value nativePathDelimiter(const std::vector<Value> &args);
+
+// Encoding module natives
+static Value nativeEncodingBase64Encode(const std::vector<Value> &args);
+static Value nativeEncodingBase64Decode(const std::vector<Value> &args);
+static Value nativeEncodingUrlEncode(const std::vector<Value> &args);
+static Value nativeEncodingUrlDecode(const std::vector<Value> &args);
+static Value nativeEncodingHexEncode(const std::vector<Value> &args);
+static Value nativeEncodingHexDecode(const std::vector<Value> &args);
+static Value nativeEncodingHtmlEscape(const std::vector<Value> &args);
+static Value nativeEncodingHtmlUnescape(const std::vector<Value> &args);
+
+// DateTime module natives
+static Value nativeDateTimeNow(const std::vector<Value> &args);
+static Value nativeDateTimeParse(const std::vector<Value> &args);
+static Value nativeDateTimeFromComponents(const std::vector<Value> &args);
+static Value nativeDateTimeYear(const std::vector<Value> &args);
+static Value nativeDateTimeMonth(const std::vector<Value> &args);
+static Value nativeDateTimeDay(const std::vector<Value> &args);
+static Value nativeDateTimeFormat(const std::vector<Value> &args);
+static Value nativeDateTimeDayOfWeek(const std::vector<Value> &args);
+static Value nativeDateTimeDayOfYear(const std::vector<Value> &args);
+static Value nativeDateTimeIsLeapYear(const std::vector<Value> &args);
+static Value nativeDateTimeDaysInMonth(const std::vector<Value> &args);
+
+// Sys module natives
+static Value nativeSysPlatform(const std::vector<Value> &args);
+static Value nativeSysArch(const std::vector<Value> &args);
+static Value nativeSysPlatformInfo(const std::vector<Value> &args);
+static Value nativeSysCpuCount(const std::vector<Value> &args);
+static Value nativeSysCpuInfo(const std::vector<Value> &args);
+static Value nativeSysTotalMemory(const std::vector<Value> &args);
+static Value nativeSysAvailableMemory(const std::vector<Value> &args);
+static Value nativeSysMemoryInfo(const std::vector<Value> &args);
+static Value nativeSysPid(const std::vector<Value> &args);
+static Value nativeSysPpid(const std::vector<Value> &args);
+static Value nativeSysProcessInfo(const std::vector<Value> &args);
+static Value nativeSysLoadAverage(const std::vector<Value> &args);
+static Value nativeSysUptime(const std::vector<Value> &args);
+static Value nativeSysHostname(const std::vector<Value> &args);
+static Value nativeSysNetworkInterfaces(const std::vector<Value> &args);
+static Value nativeSysExecutablePath(const std::vector<Value> &args);
+static Value nativeSysCwd(const std::vector<Value> &args);
+static Value nativeSysEnviron(const std::vector<Value> &args);
+static Value nativeSysExit(const std::vector<Value> &args);
+static Value nativeSysArgv(const std::vector<Value> &args);
+static Value nativeSysProgname(const std::vector<Value> &args);
+
+// UUID module natives
+static Value nativeUuidV4(const std::vector<Value> &args);
+static Value nativeUuidNil(const std::vector<Value> &args);
+static Value nativeUuidIsValid(const std::vector<Value> &args);
+static Value nativeUuidParse(const std::vector<Value> &args);
+static Value nativeUuidStringify(const std::vector<Value> &args);
+
+// URL module natives
+static Value nativeUrlParse(const std::vector<Value> &args);
+static Value nativeUrlFormat(const std::vector<Value> &args);
+static Value nativeUrlParseQuery(const std::vector<Value> &args);
+static Value nativeUrlBuildQuery(const std::vector<Value> &args);
+static Value nativeUrlResolve(const std::vector<Value> &args);
 
 
 Interpreter::Interpreter() {
@@ -1455,6 +1533,643 @@ static Value nativeRandomInt(const std::vector<Value> &args) {
   return static_cast<double>(dist(globalRng()));
 }
 
+// ========== Path Module Natives ==========
+
+static Value nativePathJoin(const std::vector<Value> &args) {
+  std::string result;
+  for (size_t i = 0; i < args.size(); ++i) {
+    std::string part = requireStringValue(args[i], "path.join part");
+    if (!result.empty() && !part.empty()) {
+      result += "/";
+    }
+    result += part;
+  }
+  return result;
+}
+
+static Value nativePathDirname(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.dirname path");
+  size_t last_sep = path.find_last_of('/');
+  if (last_sep == std::string::npos) {
+    return ".";
+  }
+  if (last_sep == 0) {
+    return "/";
+  }
+  return path.substr(0, last_sep);
+}
+
+static Value nativePathBasename(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.basename path");
+  size_t last_sep = path.find_last_of('/');
+  if (last_sep == std::string::npos) {
+    return path;
+  }
+  return path.substr(last_sep + 1);
+}
+
+static Value nativePathExtname(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.extname path");
+  size_t last_dot = path.find_last_of('.');
+  size_t last_sep = path.find_last_of('/');
+  if (last_dot == std::string::npos || (last_sep != std::string::npos && last_dot < last_sep)) {
+    return "";
+  }
+  return path.substr(last_dot);
+}
+
+static Value nativePathStem(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.stem path");
+  size_t last_dot = path.find_last_of('.');
+  size_t last_sep = path.find_last_of('/');
+  if (last_dot == std::string::npos || (last_sep != std::string::npos && last_dot < last_sep)) {
+    return nativePathBasename(args);
+  }
+  std::string basename = std::get<std::string>(nativePathBasename(args));
+  return basename.substr(0, last_dot - (path.length() - basename.length()));
+}
+
+static Value nativePathNormalize(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.normalize path");
+  // Simple normalization - remove duplicate slashes and resolve . and ..
+  // This is a basic implementation
+  return path;
+}
+
+static Value nativePathAbsolute(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.absolute path");
+  if (path[0] == '/') {
+    return path;
+  }
+  // In a real implementation, this would get the current working directory
+  return "/" + path;
+}
+
+static Value nativePathIsAbsolute(const std::vector<Value> &args) {
+  std::string path = requireStringValue(args[0], "path.is_absolute path");
+  return path[0] == '/';
+}
+
+static Value nativePathRelative(const std::vector<Value> &args) {
+  std::string from = requireStringValue(args[0], "path.relative from");
+  std::string to = requireStringValue(args[1], "path.relative to");
+  // Simple implementation
+  return to;
+}
+
+static Value nativePathResolve(const std::vector<Value> &args) {
+  // Simple implementation - just return the last argument
+  if (args.empty()) return "";
+  return requireStringValue(args.back(), "path.resolve path");
+}
+
+static Value nativePathSep(const std::vector<Value> &args) {
+  return "/";
+}
+
+static Value nativePathDelimiter(const std::vector<Value> &args) {
+  return ":";
+}
+
+// ========== Encoding Module Natives ==========
+
+static Value nativeEncodingBase64Encode(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.base64_encode data");
+  // Basic base64 implementation would go here
+  // For now, return the input unchanged
+  return data;
+}
+
+static Value nativeEncodingBase64Decode(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.base64_decode data");
+  // Basic base64 decode implementation would go here
+  return data;
+}
+
+static Value nativeEncodingUrlEncode(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.url_encode data");
+  // URL encoding implementation would go here
+  return data;
+}
+
+static Value nativeEncodingUrlDecode(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.url_decode data");
+  // URL decoding implementation would go here
+  return data;
+}
+
+static Value nativeEncodingHexEncode(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.hex_encode data");
+  std::string result;
+  for (char c : data) {
+    char buf[3];
+    sprintf(buf, "%02x", (unsigned char)c);
+    result += buf;
+  }
+  return result;
+}
+
+static Value nativeEncodingHexDecode(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.hex_decode data");
+  std::string result;
+  for (size_t i = 0; i < data.length(); i += 2) {
+    std::string byte_str = data.substr(i, 2);
+    char byte = (char)strtol(byte_str.c_str(), nullptr, 16);
+    result += byte;
+  }
+  return result;
+}
+
+static Value nativeEncodingHtmlEscape(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.html_escape data");
+  std::string result;
+  for (char c : data) {
+    switch (c) {
+      case '&': result += "&amp;"; break;
+      case '<': result += "&lt;"; break;
+      case '>': result += "&gt;"; break;
+      case '"': result += "&quot;"; break;
+      case '\'': result += "&#x27;"; break;
+      default: result += c; break;
+    }
+  }
+  return result;
+}
+
+static Value nativeEncodingHtmlUnescape(const std::vector<Value> &args) {
+  std::string data = requireStringValue(args[0], "encoding.html_unescape data");
+  // Simple implementation - replace common entities
+  std::string result = data;
+  // Replace in reverse order to avoid conflicts
+  size_t pos;
+  while ((pos = result.find("&amp;")) != std::string::npos) result.replace(pos, 5, "&");
+  while ((pos = result.find("&lt;")) != std::string::npos) result.replace(pos, 4, "<");
+  while ((pos = result.find("&gt;")) != std::string::npos) result.replace(pos, 4, ">");
+  while ((pos = result.find("&quot;")) != std::string::npos) result.replace(pos, 6, "\"");
+  return result;
+}
+
+// ========== DateTime Module Natives ==========
+
+static Value nativeDateTimeNow(const std::vector<Value> &args) {
+  auto now = std::chrono::system_clock::now();
+  auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+  return static_cast<double>(timestamp);
+}
+
+static Value nativeDateTimeParse(const std::vector<Value> &args) {
+  // Basic implementation - would need proper date parsing
+  return std::monostate{};
+}
+
+static Value nativeDateTimeFromComponents(const std::vector<Value> &args) {
+  // Would convert components to timestamp
+  return static_cast<double>(0);
+}
+
+static Value nativeDateTimeYear(const std::vector<Value> &args) {
+  double timestamp = requireNumberValue(args[0], "datetime.year timestamp");
+  time_t t = static_cast<time_t>(timestamp);
+  struct tm *tm = gmtime(&t);
+  return static_cast<double>(tm->tm_year + 1900);
+}
+
+static Value nativeDateTimeMonth(const std::vector<Value> &args) {
+  double timestamp = requireNumberValue(args[0], "datetime.month timestamp");
+  time_t t = static_cast<time_t>(timestamp);
+  struct tm *tm = gmtime(&t);
+  return static_cast<double>(tm->tm_mon + 1);
+}
+
+static Value nativeDateTimeDay(const std::vector<Value> &args) {
+  double timestamp = requireNumberValue(args[0], "datetime.day timestamp");
+  time_t t = static_cast<time_t>(timestamp);
+  struct tm *tm = gmtime(&t);
+  return static_cast<double>(tm->tm_mday);
+}
+
+static Value nativeDateTimeFormat(const std::vector<Value> &args) {
+  double timestamp = requireNumberValue(args[0], "datetime.format timestamp");
+  std::string format = requireStringValue(args[1], "datetime.format format");
+  time_t t = static_cast<time_t>(timestamp);
+  struct tm *tm = gmtime(&t);
+  char buffer[100];
+  strftime(buffer, sizeof(buffer), format.c_str(), tm);
+  return std::string(buffer);
+}
+
+static Value nativeDateTimeDayOfWeek(const std::vector<Value> &args) {
+  double timestamp = requireNumberValue(args[0], "datetime.day_of_week timestamp");
+  time_t t = static_cast<time_t>(timestamp);
+  struct tm *tm = gmtime(&t);
+  return static_cast<double>(tm->tm_wday);
+}
+
+static Value nativeDateTimeDayOfYear(const std::vector<Value> &args) {
+  double timestamp = requireNumberValue(args[0], "datetime.day_of_year timestamp");
+  time_t t = static_cast<time_t>(timestamp);
+  struct tm *tm = gmtime(&t);
+  return static_cast<double>(tm->tm_yday + 1);
+}
+
+static Value nativeDateTimeIsLeapYear(const std::vector<Value> &args) {
+  double year = requireNumberValue(args[0], "datetime.is_leap_year year");
+  int y = static_cast<int>(year);
+  return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+}
+
+static Value nativeDateTimeDaysInMonth(const std::vector<Value> &args) {
+  double year = requireNumberValue(args[0], "datetime.days_in_month year");
+  double month = requireNumberValue(args[1], "datetime.days_in_month month");
+  int y = static_cast<int>(year);
+  int m = static_cast<int>(month);
+  int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (m == 2 && ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0))) {
+    return static_cast<double>(29);
+  }
+  return static_cast<double>(days[m - 1]);
+}
+
+// ========== Sys Module Natives ==========
+
+static Value nativeSysPlatform(const std::vector<Value> &args) {
+#ifdef _WIN32
+  return "win32";
+#elif __APPLE__
+  return "darwin";
+#elif __linux__
+  return "linux";
+#else
+  return "unknown";
+#endif
+}
+
+static Value nativeSysArch(const std::vector<Value> &args) {
+#ifdef __x86_64__
+  return "x64";
+#elif __i386__
+  return "ia32";
+#elif __arm__
+  return "arm";
+#elif __aarch64__
+  return "arm64";
+#else
+  return "unknown";
+#endif
+}
+
+static Value nativeSysPlatformInfo(const std::vector<Value> &args) {
+  auto info = std::make_shared<LumaMap>();
+  info->values["os"] = nativeSysPlatform(args);
+  info->values["arch"] = nativeSysArch(args);
+  info->values["version"] = "unknown";
+  return info;
+}
+
+static Value nativeSysCpuCount(const std::vector<Value> &args) {
+  return static_cast<double>(std::thread::hardware_concurrency());
+}
+
+static Value nativeSysCpuInfo(const std::vector<Value> &args) {
+  auto info = std::make_shared<LumaMap>();
+  info->values["count"] = nativeSysCpuCount(args);
+  info->values["model"] = "unknown";
+  return info;
+}
+
+static Value nativeSysTotalMemory(const std::vector<Value> &args) {
+  // Platform-specific memory detection would go here
+  return static_cast<double>(0);
+}
+
+static Value nativeSysAvailableMemory(const std::vector<Value> &args) {
+  // Platform-specific memory detection would go here
+  return static_cast<double>(0);
+}
+
+static Value nativeSysMemoryInfo(const std::vector<Value> &args) {
+  auto info = std::make_shared<LumaMap>();
+  double total = std::get<double>(nativeSysTotalMemory(args));
+  double available = std::get<double>(nativeSysAvailableMemory(args));
+  info->values["total"] = total;
+  info->values["available"] = available;
+  info->values["used"] = total - available;
+  return info;
+}
+
+static Value nativeSysPid(const std::vector<Value> &args) {
+  return static_cast<double>(getpid());
+}
+
+static Value nativeSysPpid(const std::vector<Value> &args) {
+  return static_cast<double>(getppid());
+}
+
+static Value nativeSysProcessInfo(const std::vector<Value> &args) {
+  auto info = std::make_shared<LumaMap>();
+  info->values["pid"] = nativeSysPid(args);
+  info->values["ppid"] = nativeSysPpid(args);
+  info->values["command"] = "unknown";
+  return info;
+}
+
+static Value nativeSysLoadAverage(const std::vector<Value> &args) {
+  auto list = std::make_shared<List>();
+  list->elements = {static_cast<double>(0), static_cast<double>(0), static_cast<double>(0)};
+  return list;
+}
+
+static Value nativeSysUptime(const std::vector<Value> &args) {
+  return static_cast<double>(0);
+}
+
+static Value nativeSysHostname(const std::vector<Value> &args) {
+  char hostname[256];
+  if (gethostname(hostname, sizeof(hostname)) == 0) {
+    return std::string(hostname);
+  }
+  return "unknown";
+}
+
+static Value nativeSysNetworkInterfaces(const std::vector<Value> &args) {
+  auto list = std::make_shared<List>();
+  // Network interface detection would go here
+  return list;
+}
+
+static Value nativeSysExecutablePath(const std::vector<Value> &args) {
+  // Would need platform-specific implementation
+  return "";
+}
+
+static Value nativeSysCwd(const std::vector<Value> &args) {
+  char cwd[PATH_MAX];
+  if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+    return std::string(cwd);
+  }
+  return "";
+}
+
+static Value nativeSysEnviron(const std::vector<Value> &args) {
+  auto env = std::make_shared<LumaMap>();
+  extern char **environ;
+  for (char **envp = environ; *envp != nullptr; ++envp) {
+    std::string env_var = *envp;
+    size_t equals_pos = env_var.find('=');
+    if (equals_pos != std::string::npos) {
+      std::string key = env_var.substr(0, equals_pos);
+      std::string value = env_var.substr(equals_pos + 1);
+      env->values[key] = value;
+    }
+  }
+  return env;
+}
+
+static Value nativeSysExit(const std::vector<Value> &args) {
+  double code = requireNumberValue(args[0], "sys.exit code");
+  exit(static_cast<int>(code));
+  return std::monostate{}; // Unreachable
+}
+
+static Value nativeSysArgv(const std::vector<Value> &args) {
+  // Would need to store argv from main
+  auto list = std::make_shared<List>();
+  return list;
+}
+
+static Value nativeSysProgname(const std::vector<Value> &args) {
+  return "luma";
+}
+
+// ========== UUID Module Natives ==========
+
+static Value nativeUuidV4(const std::vector<Value> &args) {
+  // Simple UUID v4 implementation
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(0, 15);
+
+  std::string uuid = "";
+  for (int i = 0; i < 32; ++i) {
+    if (i == 8 || i == 12 || i == 16 || i == 20) {
+      uuid += "-";
+    }
+    int r = dis(gen);
+    char c = (r < 10) ? ('0' + r) : ('a' + r - 10);
+    uuid += c;
+  }
+  return uuid;
+}
+
+static Value nativeUuidNil(const std::vector<Value> &args) {
+  return "00000000-0000-0000-0000-000000000000";
+}
+
+static Value nativeUuidIsValid(const std::vector<Value> &args) {
+  std::string uuid = requireStringValue(args[0], "uuid.is_valid uuid");
+  if (uuid.length() != 36) return false;
+
+  // Check format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  for (size_t i = 0; i < uuid.length(); ++i) {
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (uuid[i] != '-') return false;
+    } else {
+      char c = uuid[i];
+      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+static Value nativeUuidParse(const std::vector<Value> &args) {
+  std::string uuid = requireStringValue(args[0], "uuid.parse uuid");
+  if (!std::get<bool>(nativeUuidIsValid(args))) {
+    return std::monostate{};
+  }
+
+  auto parsed = std::make_shared<LumaMap>();
+  parsed->values["string"] = uuid;
+  parsed->values["version"] = static_cast<double>(4); // Assume v4
+  parsed->values["variant"] = static_cast<double>(1); // RFC 4122
+  return parsed;
+}
+
+static Value nativeUuidStringify(const std::vector<Value> &args) {
+  if (std::holds_alternative<std::monostate>(args[0])) {
+    return nativeUuidNil(args);
+  }
+  auto uuid_obj = std::get<MapPtr>(args[0]);
+  return std::get<std::string>(uuid_obj->values["string"]);
+}
+
+// ========== URL Module Natives ==========
+
+static Value nativeUrlParse(const std::vector<Value> &args) {
+  std::string url_str = requireStringValue(args[0], "url.parse url");
+
+  auto parsed = std::make_shared<LumaMap>();
+  parsed->values["href"] = url_str;
+  parsed->values["protocol"] = "";
+  parsed->values["hostname"] = "";
+  parsed->values["port"] = "";
+  parsed->values["pathname"] = "";
+  parsed->values["search"] = "";
+  parsed->values["hash"] = "";
+
+  // Simple URL parsing
+  size_t proto_end = url_str.find("://");
+  if (proto_end != std::string::npos) {
+    parsed->values["protocol"] = url_str.substr(0, proto_end);
+    std::string rest = url_str.substr(proto_end + 3);
+
+    size_t path_start = rest.find('/');
+    size_t query_start = rest.find('?');
+    size_t hash_start = rest.find('#');
+
+    size_t host_end = std::min({path_start, query_start, hash_start, rest.length()});
+    std::string host_part = rest.substr(0, host_end);
+
+    // Parse hostname and port
+    size_t colon_pos = host_part.find(':');
+    if (colon_pos != std::string::npos) {
+      parsed->values["hostname"] = host_part.substr(0, colon_pos);
+      parsed->values["port"] = host_part.substr(colon_pos + 1);
+    } else {
+      parsed->values["hostname"] = host_part;
+    }
+
+    if (path_start != std::string::npos && path_start < rest.length()) {
+      size_t path_end = std::min({query_start, hash_start, rest.length()});
+      if (path_end == std::string::npos) path_end = rest.length();
+      parsed->values["pathname"] = rest.substr(path_start, path_end - path_start);
+    }
+
+    if (query_start != std::string::npos && query_start < rest.length()) {
+      size_t query_end = (hash_start != std::string::npos) ? hash_start : rest.length();
+      parsed->values["search"] = rest.substr(query_start, query_end - query_start);
+    }
+
+    if (hash_start != std::string::npos && hash_start < rest.length()) {
+      parsed->values["hash"] = rest.substr(hash_start);
+    }
+  }
+
+  return parsed;
+}
+
+static Value nativeUrlFormat(const std::vector<Value> &args) {
+  auto url_obj = std::get<MapPtr>(args[0]);
+  std::string result;
+
+  std::string protocol = std::get<std::string>(url_obj->values["protocol"]);
+  if (!protocol.empty()) {
+    result += protocol;
+    if (protocol.back() != ':') result += ":";
+    if (result.back() != '/') result += "//";
+  }
+
+  std::string hostname = std::get<std::string>(url_obj->values["hostname"]);
+  if (!hostname.empty()) {
+    result += hostname;
+  }
+
+  std::string port = std::get<std::string>(url_obj->values["port"]);
+  if (!port.empty()) {
+    result += ":" + port;
+  }
+
+  std::string pathname = std::get<std::string>(url_obj->values["pathname"]);
+  if (!pathname.empty()) {
+    result += pathname;
+  }
+
+  std::string search = std::get<std::string>(url_obj->values["search"]);
+  if (!search.empty()) {
+    result += search;
+  }
+
+  std::string hash = std::get<std::string>(url_obj->values["hash"]);
+  if (!hash.empty()) {
+    result += hash;
+  }
+
+  return result;
+}
+
+static Value nativeUrlParseQuery(const std::vector<Value> &args) {
+  std::string query_str = requireStringValue(args[0], "url.parse_query query");
+
+  auto params = std::make_shared<LumaMap>();
+
+  if (query_str.empty()) {
+    return params;
+  }
+
+  // Remove leading ?
+  if (query_str[0] == '?') {
+    query_str = query_str.substr(1);
+  }
+
+  size_t pos = 0;
+  while (pos < query_str.length()) {
+    size_t amp_pos = query_str.find('&', pos);
+    if (amp_pos == std::string::npos) {
+      amp_pos = query_str.length();
+    }
+
+    std::string pair = query_str.substr(pos, amp_pos - pos);
+    size_t eq_pos = pair.find('=');
+
+    std::string key, value;
+    if (eq_pos != std::string::npos) {
+      key = pair.substr(0, eq_pos);
+      value = pair.substr(eq_pos + 1);
+    } else {
+      key = pair;
+      value = "";
+    }
+
+    // URL decode (simplified)
+    params->values[key] = value;
+
+    pos = amp_pos + 1;
+  }
+
+  return params;
+}
+
+static Value nativeUrlBuildQuery(const std::vector<Value> &args) {
+  auto params = std::get<MapPtr>(args[0]);
+  std::string result;
+
+  bool first = true;
+  for (const auto& [key, value] : params->values) {
+    if (!first) result += "&";
+    result += key + "=" + valueToString(value);
+    first = false;
+  }
+
+  if (!result.empty()) {
+    result = "?" + result;
+  }
+
+  return result;
+}
+
+static Value nativeUrlResolve(const std::vector<Value> &args) {
+  std::string from = requireStringValue(args[0], "url.resolve from");
+  std::string to = requireStringValue(args[1], "url.resolve to");
+
+  // Simple implementation
+  if (to.find("://") != std::string::npos) {
+    return to; // Absolute URL
+  }
+
+  return to; // For now, just return 'to'
+}
+
 
 void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr exports) {
   auto defineNative = [&](const std::string &name, std::function<Value(const std::vector<Value>&)> func, size_t arity) {
@@ -1518,6 +2233,74 @@ void Interpreter::injectNativeNatives(const std::string &moduleId, MapPtr export
       defineNative("search", nativeRegexSearch, 2);
       defineNative("replace", nativeRegexReplace, 3);
       defineNative("split", nativeRegexSplit, 2);
+  } else if (moduleId == "@std.path") {
+      defineNative("join", nativePathJoin, 1); // variadic
+      defineNative("dirname", nativePathDirname, 1);
+      defineNative("basename", nativePathBasename, 1);
+      defineNative("extname", nativePathExtname, 1);
+      defineNative("stem", nativePathStem, 1);
+      defineNative("normalize", nativePathNormalize, 1);
+      defineNative("absolute", nativePathAbsolute, 1);
+      defineNative("is_absolute", nativePathIsAbsolute, 1);
+      defineNative("relative", nativePathRelative, 2);
+      defineNative("resolve", nativePathResolve, 1); // variadic
+      defineNative("sep", nativePathSep, 0);
+      defineNative("delimiter", nativePathDelimiter, 0);
+  } else if (moduleId == "@std.encoding") {
+      defineNative("base64_encode", nativeEncodingBase64Encode, 1);
+      defineNative("base64_decode", nativeEncodingBase64Decode, 1);
+      defineNative("url_encode", nativeEncodingUrlEncode, 1);
+      defineNative("url_decode", nativeEncodingUrlDecode, 1);
+      defineNative("hex_encode", nativeEncodingHexEncode, 1);
+      defineNative("hex_decode", nativeEncodingHexDecode, 1);
+      defineNative("html_escape", nativeEncodingHtmlEscape, 1);
+      defineNative("html_unescape", nativeEncodingHtmlUnescape, 1);
+  } else if (moduleId == "@std.datetime") {
+      defineNative("now", nativeDateTimeNow, 0);
+      defineNative("parse", nativeDateTimeParse, 2);
+      defineNative("from_components", nativeDateTimeFromComponents, 6);
+      defineNative("year", nativeDateTimeYear, 1);
+      defineNative("month", nativeDateTimeMonth, 1);
+      defineNative("day", nativeDateTimeDay, 1);
+      defineNative("format", nativeDateTimeFormat, 2);
+      defineNative("day_of_week", nativeDateTimeDayOfWeek, 1);
+      defineNative("day_of_year", nativeDateTimeDayOfYear, 1);
+      defineNative("is_leap_year", nativeDateTimeIsLeapYear, 1);
+      defineNative("days_in_month", nativeDateTimeDaysInMonth, 2);
+  } else if (moduleId == "@std.sys") {
+      defineNative("platform", nativeSysPlatform, 0);
+      defineNative("arch", nativeSysArch, 0);
+      defineNative("platform_info", nativeSysPlatformInfo, 0);
+      defineNative("cpu_count", nativeSysCpuCount, 0);
+      defineNative("cpu_info", nativeSysCpuInfo, 0);
+      defineNative("total_memory", nativeSysTotalMemory, 0);
+      defineNative("available_memory", nativeSysAvailableMemory, 0);
+      defineNative("memory_info", nativeSysMemoryInfo, 0);
+      defineNative("pid", nativeSysPid, 0);
+      defineNative("ppid", nativeSysPpid, 0);
+      defineNative("process_info", nativeSysProcessInfo, 0);
+      defineNative("load_average", nativeSysLoadAverage, 0);
+      defineNative("uptime", nativeSysUptime, 0);
+      defineNative("hostname", nativeSysHostname, 0);
+      defineNative("network_interfaces", nativeSysNetworkInterfaces, 0);
+      defineNative("executable_path", nativeSysExecutablePath, 0);
+      defineNative("cwd", nativeSysCwd, 0);
+      defineNative("environ", nativeSysEnviron, 0);
+      defineNative("exit", nativeSysExit, 1);
+      defineNative("argv", nativeSysArgv, 0);
+      defineNative("progname", nativeSysProgname, 0);
+  } else if (moduleId == "@std.uuid") {
+      defineNative("v4", nativeUuidV4, 0);
+      defineNative("nil", nativeUuidNil, 0);
+      defineNative("is_valid", nativeUuidIsValid, 1);
+      defineNative("parse", nativeUuidParse, 1);
+      defineNative("stringify", nativeUuidStringify, 1);
+  } else if (moduleId == "@std.url") {
+      defineNative("parse", nativeUrlParse, 1);
+      defineNative("format", nativeUrlFormat, 1);
+      defineNative("parse_query", nativeUrlParseQuery, 1);
+      defineNative("build_query", nativeUrlBuildQuery, 1);
+      defineNative("resolve", nativeUrlResolve, 2);
   }
 }
 

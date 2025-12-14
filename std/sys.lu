@@ -1,0 +1,155 @@
+module @std.sys
+
+// Standard System module for Luma
+// System information and utilities
+
+// Platform information
+// Get the operating system name
+// native def platform()
+open def platform() {
+  return "unknown"
+}
+
+// Get the platform architecture (x86, x64, arm, etc.)
+// native def arch()
+open def arch() {
+  return "unknown"
+}
+
+// Get detailed platform information
+// native def platform_info()
+open def platform_info() {
+  return {
+    "os": platform(),
+    "arch": arch(),
+    "version": "unknown"
+  }
+}
+
+// CPU information
+// Get the number of CPU cores
+// native def cpu_count()
+open def cpu_count() {
+  return 1
+}
+
+// Get CPU information
+// native def cpu_info()
+open def cpu_info() {
+  return {
+    "count": cpu_count(),
+    "model": "unknown"
+  }
+}
+
+// Memory information
+// Get total system memory in bytes
+// native def total_memory()
+open def total_memory() {
+  return 0
+}
+
+// Get available memory in bytes
+// native def available_memory()
+open def available_memory() {
+  return 0
+}
+
+// Get memory usage information
+// native def memory_info()
+open def memory_info() {
+  return {
+    "total": total_memory(),
+    "available": available_memory(),
+    "used": total_memory() - available_memory()
+  }
+}
+
+// Process information
+// Get current process ID
+// native def pid()
+open def pid() {
+  return 0
+}
+
+// Get parent process ID
+// native def ppid()
+open def ppid() {
+  return 0
+}
+
+// Get process information
+// native def process_info()
+open def process_info() {
+  return {
+    "pid": pid(),
+    "ppid": ppid(),
+    "command": "unknown"
+  }
+}
+
+// System load information (Unix-like systems)
+// Get system load averages (1, 5, 15 minute averages)
+// native def load_average()
+open def load_average() {
+  return [0.0, 0.0, 0.0]
+}
+
+// Uptime information
+// Get system uptime in seconds
+// native def uptime()
+open def uptime() {
+  return 0
+}
+
+// Network information
+// Get hostname
+// native def hostname()
+open def hostname() {
+  return "unknown"
+}
+
+// Get network interfaces information
+// native def network_interfaces()
+open def network_interfaces() {
+  return []
+}
+
+// Environment and paths
+// Get the path to the current executable
+// native def executable_path()
+open def executable_path() {
+  return ""
+}
+
+// Get the current working directory
+// native def cwd()
+open def cwd() {
+  return ""
+}
+
+// Get environment variables as a map
+// native def environ()
+open def environ() {
+  return {}
+}
+
+// System utilities
+// Exit the program with a status code
+// native def exit(code)
+open def exit(code) {
+  // This would normally call the OS exit function
+  return nil
+}
+
+// Get command line arguments
+// native def argv()
+open def argv() {
+  return []
+}
+
+// Get the program name
+// native def progname()
+open def progname() {
+  return "luma"
+}
