@@ -20,8 +20,5 @@ Thumbs.db
 *.swp
 *.swo
 
-# Luma
-luma-extension/
-
 # Tests
 tests/
