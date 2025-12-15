@@ -2087,7 +2087,7 @@ static Value nativeEncodingHexEncode(const std::vector<Value> &args) {
   std::string result;
   for (char c : data) {
     char buf[3];
-    sprintf(buf, "%02x", (unsigned char)c);
+    snprintf(buf, sizeof(buf), "%02x", (unsigned char)c);
     result += buf;
   }
   return result;
