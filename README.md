@@ -246,7 +246,7 @@ The project follows a modular interpreter architecture:
 
 ---
 
-Built with ❤️ by Leonard Gunder.
+Built with ❤️ by Puukis.
 
 ## 📄 License
 
